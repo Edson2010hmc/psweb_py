@@ -2,22 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 PSWEB Python - Aplicação Principal
-TODAS as regras de negócio movidas para o backend
-Frontend apenas interface
 """
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 import logging
 
 from app.config.settings import settings
 from app.config.database import init_database
 
-# Importar TODAS as APIs com regras de negócio
-from app.api.v1 import fiscais_api, embarcacoes_api, passagens_api
+# Importar routers
+from app.api.v1 import fiscais
 
 # Configurar logging
 logging.basicConfig(
@@ -28,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="PSWEB - Passagem de Serviço",
-    description="Sistema de Passagem de Serviço - Fiscalização (Python)\nBackend: Regras de negócio\nFrontend: Apenas interface",
+    description="Sistema de Passagem de Serviço - Fiscalização (Python)",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -43,43 +39,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Templates (Jinja2)
-templates = Jinja2Templates(directory="C:/Users/Public/psweb_py/frontend/templates")
+# Incluir routers das APIs
+app.include_router(fiscais.router, prefix="", tags=["Fiscais"])
 
-# Static files
-try:
-    app.mount("/static", StaticFiles(directory="C:/Users/Public/psweb_py/frontend/templates"), name="static")
-    logger.info("Arquivos estáticos montados em /static")
-except Exception as e:
-    logger.warning(f"Não foi possível montar arquivos estáticos: {e}")
-
-# === INCLUIR TODAS AS APIs COM REGRAS DE NEGÓCIO ===
-app.include_router(fiscais_api.router, tags=["Fiscais - Backend Logic"])
-app.include_router(embarcacoes_api.router, tags=["Embarcações - Backend Logic"]) 
-app.include_router(passagens_api.router, tags=["Passagens - Backend Logic"])
-
-# === FRONTEND - APENAS INTERFACE ===
-@app.get("/", response_class=HTMLResponse, tags=["Frontend - Interface"])
-async def root(request: Request):
-    """Serve a interface web - APENAS APRESENTAÇÃO"""
-    return templates.TemplateResponse("index.html", {"request": request})
-
-# === API ENDPOINTS DE SISTEMA ===
-@app.get("/api", tags=["Sistema"])
-async def api_root():
+# Rota raiz
+@app.get("/", tags=["Root"])
+async def root():
     """Endpoint raiz da API"""
     return {
-        "message": "PSWEB Python API - Regras de Negócio no Backend",
+        "message": "PSWEB Python API",
         "version": "2.0.0",
-        "status": "running", 
-        "architecture": "Backend: Business Logic | Frontend: UI Only",
+        "status": "running",
         "docs": "/docs"
     }
 
-@app.get("/health", tags=["Sistema"])
+# Health check
+@app.get("/health", tags=["Health"])
 async def health_check():
-    """Health check com teste de banco"""
+    """Endpoint para verificação de saúde da API"""
     try:
+        # Testa conexão com banco
         from app.config.database import db
         connection = db.get_connection()
         cursor = connection.cursor()
@@ -96,17 +75,23 @@ async def health_check():
     return {
         "status": "ok",
         "database": db_status,
-        "version": "2.0.0",
-        "architecture": "Separação correta Frontend/Backend"
+        "version": "2.0.0"
     }
+
+# Static files (frontend)
+try:
+    app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
+    logger.info("Arquivos estáticos montados em /static")
+except Exception as e:
+    logger.warning(f"Não foi possível montar arquivos estáticos: {e}")
 
 @app.on_event("startup")
 async def startup_event():
     """Inicialização da aplicação"""
     logger.info("Iniciando PSWEB Python API...")
-    logger.info("Arquitetura: Backend = Regras de Negócio | Frontend = Interface")
     
     try:
+        # Inicializa conexão com banco
         success = await init_database()
         if success:
             logger.info("Banco de dados conectado com sucesso")
@@ -127,11 +112,7 @@ if __name__ == "__main__":
     
     logger.info(f"Iniciando servidor em {settings.HOST}:{settings.PORT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
-    logger.info(f"Interface web: http://{settings.HOST}:{settings.PORT}")
-    logger.info(f"API Docs: http://{settings.HOST}:{settings.PORT}/docs")
-    logger.info("=== ARQUITETURA CORRETA ===")
-    logger.info("Backend Python: TODAS as regras de negócio e validações")
-    logger.info("Frontend: APENAS interface e interação com usuário")
+    logger.info(f"Documentação disponível em: http://{settings.HOST}:{settings.PORT}/docs")
     
     uvicorn.run(
         "main:app",

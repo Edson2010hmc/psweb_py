@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script para executar o servidor PSWEB Python - CORRIGIDO PARA FDB
+Script corrigido para executar o servidor PSWEB Python
 """
 
 import sys
@@ -22,30 +22,8 @@ def setup_python_path():
     
     return backend_dir
 
-def setup_firebird_environment():
-    """Configura ambiente Firebird - BASEADO NA APLICAÇÃO FUNCIONAL"""
-    firebird_dir = r"C:\Users\Public\Firebird-4.0.5.3140-0-x64"
-    
-    # Adiciona ao PATH
-    current_path = os.environ.get("PATH", "")
-    if firebird_dir not in current_path:
-        os.environ["PATH"] = firebird_dir + os.pathsep + current_path
-        print(f"  ✓ PATH atualizado: {firebird_dir}")
-    
-    # Carrega DLL explicitamente
-    try:
-        import ctypes
-        dll_path = os.path.join(firebird_dir, "fbclient.dll")
-        if os.path.exists(dll_path):
-            ctypes.windll.LoadLibrary(dll_path)
-            print(f"  ✓ fbclient.dll carregada: {dll_path}")
-        else:
-            print(f"  ⚠️  fbclient.dll não encontrada: {dll_path}")
-    except Exception as e:
-        print(f"  ⚠️  Erro ao carregar DLL: {e}")
-
 def test_imports():
-    """Testa se os imports principais funcionam - CORRIGIDO PARA FDB"""
+    """Testa se os imports principais funcionam"""
     print("\nTestando imports...")
     
     try:
@@ -57,9 +35,9 @@ def test_imports():
         import uvicorn
         print("  ✓ Uvicorn disponível")
         
-        # Testa driver FDB (CORRIGIDO)
-        import fdb
-        print("  ✓ FDB driver disponível")
+        # Testa Firebird driver
+        import firebird.driver
+        print("  ✓ Firebird driver disponível")
         
         # Testa se consegue importar o app
         from app.main import app
@@ -97,7 +75,7 @@ def check_files():
     return len(missing) == 0
 
 def test_database_connection():
-    """Testa conexão com o banco - USANDO FDB"""
+    """Testa conexão com o banco"""
     print("\nTestando conexão com banco...")
     
     try:
@@ -129,26 +107,23 @@ def main():
         # 1. Configurar Python path
         backend_dir = setup_python_path()
         
-        # 2. Configurar ambiente Firebird
-        setup_firebird_environment()
-        
-        # 3. Verificar arquivos
+        # 2. Verificar arquivos
         if not check_files():
             print("\n❌ Arquivos necessários faltando!")
             return False
         
-        # 4. Testar imports
+        # 3. Testar imports
         if not test_imports():
             print("\n❌ Erro nos imports!")
             return False
         
-        # 5. Testar banco
+        # 4. Testar banco
         if not test_database_connection():
             print("\n❌ Erro na conexão com banco!")
             print("Verifique se o Firebird está rodando e acessível")
             return False
         
-        # 6. Importar e executar
+        # 5. Importar e executar
         print("\n🚀 Iniciando servidor...")
         from app.main import app
         from app.config.settings import settings
@@ -159,7 +134,7 @@ def main():
         print("Pressione Ctrl+C para parar")
         
         uvicorn.run(
-            "app.main:app",
+            app,
             host=settings.HOST,
             port=settings.PORT,
             reload=settings.DEBUG,
@@ -173,8 +148,8 @@ def main():
         return True
     except ImportError as e:
         print(f"\n❌ Erro de import: {e}")
-        print("\nVerifique se o driver FDB está instalado:")
-        print("pip install fdb")
+        print("\nVerifique se o driver firebird-driver está instalado:")
+        print("pip install firebird-driver")
         return False
     except Exception as e:
         print(f"\n❌ Erro inesperado: {e}")
