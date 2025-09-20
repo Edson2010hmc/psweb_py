@@ -14,10 +14,11 @@ const api = {
   async embarcacoes(){ const r = await fetch('/api/embarcacoes'); return r.json(); },
   
   // === FISCAIS - REFATORADO PARA USAR BACKEND ===
-  async fiscais(){ const r = await fetch('/api/fiscais'); return r.json(); },
-  async createFiscal(data){ const r = await fetch('/api/fiscais', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
-  async updateFiscal(id, data){ const r = await fetch(`/api/fiscais/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
-  async deleteFiscal(id){ const r = await fetch(`/api/fiscais/${id}`, {method:'DELETE'}); return r.json(); },
+  // CORRIGIR estas linhas no objeto api:
+  async fiscais(){ const r = await fetch('/api/fiscais/'); return r.json(); },
+  async createFiscal(data){ const r = await fetch('/api/fiscais/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
+  async updateFiscal(id, data){ const r = await fetch(`/api/fiscais/${id}/`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
+  async deleteFiscal(id){ const r = await fetch(`/api/fiscais/${id}/`, {method:'DELETE'}); return r.json(); },
   
   // === PASSAGENS DE SERVIÇO ===
   async listarPS(inicio, fim){ const p = new URLSearchParams(); if (inicio) p.append('inicio',inicio); if (fim) p.append('fim',fim); const r = await fetch('/api/passagens?'+p.toString()); return r.json(); },
