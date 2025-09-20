@@ -52,7 +52,7 @@ def test_imports():
         # Testa FastAPI
         import fastapi
         print("  ✓ FastAPI disponível")
-        
+                
         # Testa uvicorn
         import uvicorn
         print("  ✓ Uvicorn disponível")

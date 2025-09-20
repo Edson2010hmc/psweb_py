@@ -19,7 +19,7 @@ from app.config.database import init_database
 # Importar TODAS as APIs com regras de negócio REFATORADAS
 from app.api.v1 import fiscais_api, passagens_api
 from app.api.v1.embarcacoes_api import router as embarcacoes_router
-
+from app.api.v1.administradores_api import router as administradores_router
 # Configurar logging
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +67,7 @@ except Exception as e:
 app.include_router(fiscais_api.router, tags=["Fiscais"])
 app.include_router(embarcacoes_router, tags=["Embarcações"]) 
 app.include_router(passagens_api.router, tags=["Passagens"])
+app.include_router(administradores_router, tags=["Administradores"])
 
 # === FRONTEND - APENAS INTERFACE ===
 @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
