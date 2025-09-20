@@ -1,13 +1,25 @@
-
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+// ===================================================================================================
+// API CLIENT - Comunicação com Backend
+// ===================================================================================================
 const api = {
+  // === AUTENTICAÇÃO ===
   async me(){ const r = await fetch('/api/me'); return r.json(); },
   async loginManual(nome){ const r = await fetch('/api/login-manual',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nome})}); return r.json(); },
   async logout(){ const r = await fetch('/api/logout',{method:'POST'}); return r.json(); },
+  
+  // === EMBARCAÇÕES ===
   async embarcacoes(){ const r = await fetch('/api/embarcacoes'); return r.json(); },
+  
+  // === FISCAIS - REFATORADO PARA USAR BACKEND ===
   async fiscais(){ const r = await fetch('/api/fiscais'); return r.json(); },
+  async createFiscal(data){ const r = await fetch('/api/fiscais', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
+  async updateFiscal(id, data){ const r = await fetch(`/api/fiscais/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
+  async deleteFiscal(id){ const r = await fetch(`/api/fiscais/${id}`, {method:'DELETE'}); return r.json(); },
+  
+  // === PASSAGENS DE SERVIÇO ===
   async listarPS(inicio, fim){ const p = new URLSearchParams(); if (inicio) p.append('inicio',inicio); if (fim) p.append('fim',fim); const r = await fetch('/api/passagens?'+p.toString()); return r.json(); },
   async ps(id){ const r = await fetch('/api/passagens/'+id); return r.json(); },
   async criarPS(data){ const r = await fetch('/api/passagens', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) }); return r.json(); },
@@ -18,6 +30,9 @@ const api = {
   async adminExcluirPS(id){ const r = await fetch('/api/admin/passagens/'+id, { method:'DELETE' }); return r.json(); }
 };
 
+// ===================================================================================================
+// VARIÁVEIS GLOBAIS
+// ===================================================================================================
 let EMB_EDITING_ID = null;
 let CTX=null; 
 let FISCAIS=[]; 
@@ -28,8 +43,9 @@ const isWindowsAuth = () => AUTH_MODE === 'windows';
 let ADMIN_PS = [];
 let FISC_EDITING_ID = null;
 
-
-// ===  Normalização opcional de chaves de objetos  ===
+// ===================================================================================================
+// NORMALIZAÇÃO DE CHAVES DE OBJETOS (Opcional)
+// ===================================================================================================
 function _normalizeKeyToCamelPascal(k) {
   // Converte "EMBARCACAOID" -> "EmbarcacaoId" | "PASSAGEM_ID" -> "PassagemId"
   if (typeof k !== 'string' || !k) return k;
@@ -57,16 +73,16 @@ function normalizeDeep(value) {
   }
   return value;
 }
-// === [END] Normalização opcional de chaves ===
 
-
-
-
-
-
-// Helpers simples
+// ===================================================================================================
+// UTILITÁRIOS GERAIS
+// ===================================================================================================
 function _show(el, on){ if(el) el.style.display = on ? '' : 'none'; }
 function _disable(el, on){ if(el) el.disabled = !!on; }
+
+// ===================================================================================================
+// SEÇÃO PORTO - Regras de Visibilidade e Controles
+// ===================================================================================================
 
 // Aplica regras de visibilidade/disable conforme checkboxes
 function applyPortoVisibility(){
@@ -131,7 +147,7 @@ function applyPortoVisibility(){
   _show(document.getElementById('btnAddOM'),  !omOff);
 }
 
-// liga os eventos
+// Liga os eventos de visibilidade do Porto
 function bindPortoToggles(){
   [
     'mpNaoSolicitada','mpNaoProgramada',
@@ -146,14 +162,13 @@ function bindPortoToggles(){
   });
 }
 
-//Inicializa ao abrir a sub-aba PORTO e também após carregar dados
+// Inicializa controles do Porto
 document.addEventListener('DOMContentLoaded', ()=>{
   bindPortoToggles();
-  // Se a sub-aba já estiver ativa e houver PS carregada
   applyPortoVisibility();
 });
 
-// Garante que roda após cada carregarPorto_11a16 / 17a110
+// Garantir execução após carregamento de dados do Porto
 const _carregar11a16 = window.carregarPorto_11a16;
 window.carregarPorto_11a16 = async function(psId){
   const r = await _carregar11a16(psId);
@@ -167,7 +182,9 @@ window.carregarPorto_17a110 = async function(psId){
   return r;
 };
 
-// APIs específicas para partes da PS (Porto e Listas)
+// ===================================================================================================
+// APIS ESPECÍFICAS PARA SEÇÕES PORTO
+// ===================================================================================================
 api.portoGet = async function(id){
   const r = await fetch(`/api/passagens/${id}/porto`);
   return r.json();
@@ -193,13 +210,10 @@ api.uploadAnexo = async function(id, file){
   const r = await fetch(`/api/passagens/${id}/upload`, { method:'POST', body: fd });
   return r.json(); // { ok:true, path: '...' }
 };
-// Fim APIs específicas para partes da PS
 
-
-
-
-
-// Carrega os dados da seção Porto 1.1 a 1.6 na UI
+// ===================================================================================================
+// SEÇÃO PORTO - Carregamento de Dados (1.1 a 1.6)
+// ===================================================================================================
 async function carregarPorto_11a16(psId){
   const d = await api.portoGet(psId);
   if (!d || d.error) return;
@@ -222,7 +236,6 @@ async function carregarPorto_11a16(psId){
     $('#mpOS').value              = d.manutencaoPreventiva.OrdemServico ?? '';
     $('#mpSaldo').value           = d.manutencaoPreventiva.SaldoFranquiaMin ?? '';
     $('#mpObs').value             = d.manutencaoPreventiva.Observacoes ?? '';
-    // RADEPath é tratado no upload no salvar (não “preenche” input file)
   }
 
   // 1.3 Abastecimento
@@ -232,7 +245,6 @@ async function carregarPorto_11a16(psId){
     $('#abQtd').value           = d.abastecimento.Quantidade_m3 ?? '';
     $('#abDuracao').value       = d.abastecimento.DuracaoMin ?? '';
     $('#abObs').value           = d.abastecimento.Observacoes ?? '';
-    // AnexoPath idem: trataremos no salvar
   }
 
   // 1.4 ANVISA
@@ -261,7 +273,7 @@ async function carregarPorto_11a16(psId){
 }
 
 async function salvarPorto_11a16(psId){
-  // helpers de upload de arquivos individuais (se houver)
+  // Upload de arquivos individuais se houver
   async function maybeUpload(fileInputId){
     const el = document.getElementById(fileInputId);
     if (!el || !el.files || el.files.length === 0) return null;
@@ -320,19 +332,18 @@ async function salvarPorto_11a16(psId){
   };
 
   return api.portoSave(psId, body);
-}//--fim de salvarPorto_11a16
+}
 
-
-
-
-//-----------------------------------PORTO 1.7 a 1.10----------------------------
+// ===================================================================================================
+// SEÇÃO PORTO - Tabelas Dinâmicas (1.7 a 1.10)
+// ===================================================================================================
 function _rowInput(type, cls, placeholder='', attrs=''){
   return `<${type} class="${cls}" placeholder="${placeholder}" ${attrs}>`;
 }
 function _rowFile(cls){ return `<input type="file" class="${cls}">`; }
-
 function _tbl(tid){ return document.querySelector(`#${tid} tbody`); }
 
+// 1.7 Embarque de Equipes
 function addRowEq(v={Tipo:'',Empresa:'',Nome:'',Observacoes:''}){
   const tb = _tbl('tblEq'); if (!tb) return;
   const tr = document.createElement('tr');
@@ -349,6 +360,7 @@ function addRowEq(v={Tipo:'',Empresa:'',Nome:'',Observacoes:''}){
   tr.querySelector('.eq-obs').value = v.Observacoes || '';
 }
 
+// 1.8 Embarque de Materiais
 function addRowEM(v={Origem:'',OS:'',Destino:'',RT:'',Observacoes:'',AnexoPath:null}){
   const tb = _tbl('tblEM'); if (!tb) return;
   const tr = document.createElement('tr');
@@ -369,6 +381,7 @@ function addRowEM(v={Origem:'',OS:'',Destino:'',RT:'',Observacoes:'',AnexoPath:n
   tr.dataset.anexopath = v.AnexoPath || '';
 }
 
+// 1.9 Desembarque de Materiais
 function addRowDM(v={OS:'',Origem:'',Destino:'',RT:'',Observacoes:'',AnexoPath:null}){
   const tb = _tbl('tblDM'); if (!tb) return;
   const tr = document.createElement('tr');
@@ -389,6 +402,7 @@ function addRowDM(v={OS:'',Origem:'',Destino:'',RT:'',Observacoes:'',AnexoPath:n
   tr.dataset.anexopath = v.AnexoPath || '';
 }
 
+// 1.10 OS Mobilização/Desmobilização
 function addRowOM(v={OS:'',Descricao:'',Observacoes:'',AnexoPath:null}){
   const tb = _tbl('tblOM'); if (!tb) return;
   const tr = document.createElement('tr');
@@ -405,6 +419,7 @@ function addRowOM(v={OS:'',Descricao:'',Observacoes:'',AnexoPath:null}){
   tr.dataset.anexopath = v.AnexoPath || '';
 }
 
+// Event listener para botões de remoção das tabelas
 function bindTableRowDeletes(){
   document.querySelectorAll('#tblEq, #tblEM, #tblDM, #tblOM').forEach(tbl=>{
     tbl.addEventListener('click', (ev)=>{
@@ -414,6 +429,7 @@ function bindTableRowDeletes(){
   });
 }
 
+// Carregamento das listas do Porto (1.7 a 1.10)
 async function carregarPorto_17a110(psId){
   const d = await api.portoListasGet(psId);
   if (!d || d.error) return;
@@ -440,11 +456,11 @@ async function carregarPorto_17a110(psId){
   (d.osMobilizacao?.linhas || []).forEach(addRowOM);
 
   applyPortoVisibility();
-
 }
 
+// Salvamento das listas do Porto (1.7 a 1.10)
 async function salvarPorto_17a110(psId){
-  // Upload de anexos das linhas, se houver
+  // Upload de anexos das linhas
   async function maybeUploadRow(fileEl){
     if (!fileEl || !fileEl.files || fileEl.files.length === 0) return null;
     const up = await api.uploadAnexo(psId, fileEl.files[0]);
@@ -452,7 +468,7 @@ async function salvarPorto_17a110(psId){
     throw new Error('Falha no upload de anexo em linha');
   }
 
-  // monta arrays
+  // Monta arrays de dados
   const eq = Array.from(document.querySelectorAll('#tblEq tbody tr')).map(tr=>({
     Tipo: tr.querySelector('.eq-tipo')?.value || null,
     Empresa: tr.querySelector('.eq-empresa')?.value || null,
@@ -506,8 +522,8 @@ async function salvarPorto_17a110(psId){
   return api.portoListasSave(psId, body);
 }
 
+// Aplicar locks de edição no Porto
 function aplicarLockPorto(){
-  // Reaproveita a lógica já aplicada nos botões gerais:
   const canEdit = !($('#btnSalvar')?.disabled);
   const scope = document.querySelector('#sub-porto');
   if (!scope) return;
@@ -518,11 +534,11 @@ function aplicarLockPorto(){
   });
 }
 
+// ===================================================================================================
+// GESTÃO DE FISCAIS - REFATORADO (USA BACKEND)
+// ===================================================================================================
 
-
-
-
-//-----------------------------------FISCAIS CADASTRO----------------------------
+// Renderiza lista de fiscais na interface
 function renderFiscalList() {
   const sel = document.getElementById('cad_f_list');
   if (!sel) return;
@@ -539,6 +555,7 @@ function renderFiscalList() {
   updateFiscalButtons();
 }
 
+// Habilita/desabilita botões conforme seleção
 function updateFiscalButtons() {
   const sel = document.getElementById('cad_f_list');
   const hasSel = !!(sel && sel.value);
@@ -548,6 +565,7 @@ function updateFiscalButtons() {
   if (bEx) bEx.disabled = !hasSel;
 }
 
+// Reseta interface de edição de fiscais
 function fiscalResetUI() {
   FISC_EDITING_ID = null;
   const n = document.getElementById('cad_f_nome'); if (n) n.value = '';
@@ -568,6 +586,7 @@ function fiscalResetUI() {
   updateFiscalButtons();
 }
 
+// Entra em modo de edição de fiscal
 function fiscalEnterEditMode(id, nome, chave, telefone) {
   FISC_EDITING_ID = id;
   const n = document.getElementById('cad_f_nome'); if (n) n.value = nome || '';
@@ -586,7 +605,7 @@ function fiscalEnterEditMode(id, nome, chave, telefone) {
   if (sel) sel.disabled = true;
 }
 
-
+// Inicia edição de fiscal selecionado
 async function onFiscalEditar(){
   const sel = document.getElementById('cad_f_list');
   if (!sel || !sel.value) return;
@@ -596,6 +615,7 @@ async function onFiscalEditar(){
   fiscalEnterEditMode(id, it.Nome, it.Chave, it.Telefone);
 }
 
+// Confirma edição de fiscal - REFATORADO: USA BACKEND
 async function onFiscalConfirma(){
   const id = FISC_EDITING_ID;
   if (!id) return;
@@ -604,29 +624,24 @@ async function onFiscalConfirma(){
   const chave = document.getElementById('cad_f_ch')?.value?.trim() || '';
   const telefone = (document.getElementById('cad_f_tel')?.value || '').trim();
   
-  if (!nome || !chave) { alert('Preencha Nome e Chave do Fiscal.'); return; }
-  if (chave.length !== 4){ alert('Chave deve ter 4 caracteres.'); return; }
-  if (telefone && telefone.length > 15){ alert('Telefone deve ter no máximo 15 caracteres.'); return; }
-
-  const r = await fetch(`/api/fiscais/${id}`, {
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ Nome:nome, Chave:chave, Telefone:telefone })
-  });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok){ alert(j.error || 'Falha ao salvar alterações'); return; }
-
-  try { FISCAIS = await api.fiscais(); } catch(_) {}
-  renderFiscalList();
-  fiscalResetUI();
-  // reabilita a combo após confirmar edição
-  alert('Alterações salvas.');
+  try {
+    await api.updateFiscal(id, { Nome:nome, Chave:chave, Telefone:telefone });
+    FISCAIS = await api.fiscais();
+    renderFiscalList();
+    fiscalResetUI();
+    alert('Alterações salvas.');
+  } catch(e) {
+    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao salvar');
+    alert('Erro: ' + errorMsg);
+  }
 }
 
+// Cancela edição de fiscal
 function onFiscalCancela(){
   fiscalResetUI();
 }
 
+// Exclui fiscal selecionado - REFATORADO: USA BACKEND
 async function onFiscalExcluir(){
   const sel = document.getElementById('cad_f_list');
   if (!sel || !sel.value) return;
@@ -648,27 +663,50 @@ async function onFiscalExcluir(){
     return;
   }
 
-  const r = await fetch(`/api/fiscais/${id}`, { method:'DELETE' });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok){
-    alert(j.error || 'Falha ao excluir (verifique se há PS vinculadas).');
+  try {
+    await api.deleteFiscal(id);
+    FISCAIS = await api.fiscais();
+    renderFiscalList();
+    fiscalResetUI();
+    alert('Fiscal excluído.');
+  } catch(e) {
+    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao excluir');
+    alert('Erro: ' + errorMsg);
     if (bSave) bSave.disabled = false;
     if (bEd)   bEd.disabled   = false;
     updateFiscalButtons();
-    return;
   }
-
-  try { FISCAIS = await api.fiscais(); } catch(_) {}
-  renderFiscalList();
-  fiscalResetUI();
-  const bSave2 = document.getElementById('btnSaveFiscal');
-  if (bSave2) bSave2.disabled = false;
-  alert('Fiscal excluído.');
 }
 
+// Salva novo fiscal - REFATORADO: USA BACKEND
+async function saveFiscal(){
+  const nome = document.getElementById('cad_f_nome')?.value?.trim() || '';
+  const chave = document.getElementById('cad_f_ch')?.value?.trim() || '';
+  const telefone = (document.getElementById('cad_f_tel')?.value || '').trim();
 
-//-----------------------------------PASSAGENS DE SERVIÇO CADASTRO----------------------------
+  try {
+    await api.createFiscal({ Nome:nome, Chave:chave, Telefone:telefone });
+    
+    // Limpa campos
+    document.getElementById('cad_f_nome').value = '';
+    document.getElementById('cad_f_ch').value = '';
+    document.getElementById('cad_f_tel').value = '';
+    
+    // Recarrega lista
+    FISCAIS = await api.fiscais();
+    renderFiscalList();
+    alert('Fiscal salvo.');
+  } catch(e) {
+    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao salvar');
+    alert('Erro: ' + errorMsg);
+  }
+}
 
+// ===================================================================================================
+// GESTÃO DE PASSAGENS DE SERVIÇO
+// ===================================================================================================
+
+// Renderiza lista de PS para administração
 function renderAdminPSList(){
   const sel = document.getElementById('admin_ps_list');
   if (!sel) return;
@@ -686,7 +724,6 @@ function renderAdminPSList(){
   if (cur && Array.from(sel.options).some(o=>o.value===cur)) sel.value = cur;
   updateAdminPSButtons();
 }
-
 
 /**
  * Calcula os dados da próxima PS a partir da data de primeiro porto
@@ -718,7 +755,6 @@ function calcularProximaPS(primeiroPorto, hoje = new Date()) {
   const emissao = new Date(inicio.getTime() + duracao * 86400000);
 
   // Número/ano reinicia a cada ano CIVIL, respeitando a PEP
-  // (âncora = max(01/jan do ano da EMISSÃO, data do primeiro porto))
   const ano = emissao.getFullYear();
   const inicioAno = new Date(ano, 0, 1);
   const ancora = dtPrimeiro > inicioAno ? dtPrimeiro : inicioAno;
@@ -737,21 +773,19 @@ function calcularProximaPS(primeiroPorto, hoje = new Date()) {
   };
 }
 
-
+// Guarda contra criação de PS se já existe rascunho
 async function onNovaPS_Guard() {
-  // limpa mensagem anterior
   const msg = document.getElementById('msgNovaPS');
   if (msg) msg.innerText = '';
 
   try {
-    const lista = await api.listarPS(); // já existe no seu api
+    const lista = await api.listarPS();
     const hasRasc = Array.isArray(lista) && lista.some(ps =>
       ps && ps.Status === 'RASCUNHO' && ps.FiscalDesembarcandoId === CTX?.fiscalId
     );
 
     if (hasRasc) {
       if (msg) msg.innerText = 'Já existe uma PS em rascunho para o usuario logado';
-      // não abre o modal
       return;
     }
   } catch(_){ /* falha na checagem → segue fluxo atual */ }
@@ -760,16 +794,13 @@ async function onNovaPS_Guard() {
   abrirModalNovaPS_forcado();
 }
 
-
-
+// Preenche dropdown de embarcações no modal
 function preencherModalEmbarcacoes() {
   const sel = document.getElementById('selEmbNova');
   if (!sel) return;
 
-  // limpa e repõe o placeholder
   sel.innerHTML = '<option value="">— selecione —</option>';
 
-  // preenche usando a fonte já utilizada no projeto
   (EMB || []).forEach(e => {
     const opt = document.createElement('option');
     opt.value = String(e.EmbarcacaoId);
@@ -777,18 +808,15 @@ function preencherModalEmbarcacoes() {
     sel.appendChild(opt);
   });
 
-  // desabilita Confirmar até escolher algo
   const btnOK = document.getElementById('btnModalNovaConfirmar');
   if (btnOK) btnOK.disabled = true;
 }
 
-
-
-
+// Abre modal para nova PS
 async function abrirModalNovaPS_forcado() {
   if (!EMB.length) { try { EMB = await api.embarcacoes(); } catch(_) {} }
   preencherModalEmbarcacoes();
-  // reutiliza função existente para exibir o modal
+  
   const sel = document.getElementById('selEmbNova');
   if (sel) {
     sel.onchange = () => {
@@ -796,41 +824,31 @@ async function abrirModalNovaPS_forcado() {
       if (btnOK) btnOK.disabled = !(sel && sel.value);
     };
   }
-  abrirModalNovaPS(); // já existe no projeto
+  abrirModalNovaPS();
 }
 
-
+// Confirma criação de nova PS no modal
 async function confirmarModalNovaPS() {
   const sel = document.getElementById('selEmbNova');
   const msg = document.getElementById('msgModalNovaPS');
   if (msg) msg.textContent = '';
   if (!sel || !sel.value) return;
 
-  // chama o fluxo já existente, apenas informando a embarcação escolhida
-  await novaPS(Number(sel.value));  // novaPS será ajustada para aceitar embId (item 3)
+  await novaPS(Number(sel.value));
 
   // fecha o modal somente se a aba "Passagem" estiver ativa (sucesso)
   const passTab = document.getElementById('tab-passagem');
   if (passTab && passTab.classList.contains('active')) {
-    fecharModalNovaPS(); // já existe no projeto
+    fecharModalNovaPS();
   } else {
-    // Em caso de erro (ex.: rascunho existente), a mensagem já é exibida no span original (#msgNovaPS)
-    // Opcional: espelhar em msgModalNovaPS, se desejar, SEM remover o comportamento atual.
-    const spanLista = document.getElementById('msgNovaPS'); // já existe na tela Consultas
+    const spanLista = document.getElementById('msgNovaPS');
     if (spanLista && spanLista.textContent && msg) {
       msg.textContent = spanLista.textContent;
     }
   }
 }
 
-
-
-
-
-
-
-
-
+// Exclui PS da administração
 async function onAdminPSDelete(){
   const sel = document.getElementById('admin_ps_list');
   if (!sel || !sel.value) return;
@@ -848,19 +866,20 @@ async function onAdminPSDelete(){
     if (btn) btn.disabled=false;
     return;
   }
-  // Atualiza a lista admin e a lista "Minhas PS" da tela de Consultas
+  
   await adminLoadPS();
   try{ await buscar(); }catch(_){}
   alert('PS excluída.');
 }
 
-
+// Habilita/desabilita botões de administração de PS
 function updateAdminPSButtons(){
   const sel = document.getElementById('admin_ps_list');
   const btn = document.getElementById('btnAdminPSDelete');
   if (btn) btn.disabled = !(sel && sel.value);
 }
 
+// Carrega lista de PS para administração
 async function adminLoadPS(){
   try{
     ADMIN_PS = await api.adminListarPS();
@@ -869,24 +888,28 @@ async function adminLoadPS(){
   renderAdminPSList();
 }
 
-
+// Aplica configuração de usuário desembarcando
 function applyDesembarcanteLock() {
   const el = document.getElementById('fDesCNome');
   if (!el) return;
 
   if (isWindowsAuth()) {
-    // usa o nome do usuário logado vindo do /api/me
     const nomeLogado = (CTX && (CTX.nome || CTX.fiscalNome)) || '';
     if (nomeLogado) el.value = nomeLogado;
-    el.readOnly = true;             // não editável em modo Windows
+    el.readOnly = true;
     el.setAttribute('aria-readonly','true');
   } else {
-    // modo manual: liberado para digitar
     el.readOnly = false;
     el.removeAttribute('aria-readonly');
     if (!el.value) el.placeholder = 'Digite o nome conforme cadastro';
   }
 }
+
+// ===================================================================================================
+// GESTÃO DE EMBARCAÇÕES
+// ===================================================================================================
+
+// Renderiza lista de embarcações
 function renderEmbList() {
   const sel = document.getElementById('cad_e_list');
   if (!sel) return;
@@ -898,15 +921,14 @@ function renderEmbList() {
     opt.textContent = `${(e.TipoEmbarcacao||'').toString().padEnd(5,' ').slice(0,5)} ${e.Nome}`;
     sel.appendChild(opt);
   });
-  // tenta manter seleção
   if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
   updateEmbButtons();
 }
 
-// === Embarcações: habilita/desabilita botões conforme seleção ===
+// Habilita/desabilita botões de embarcações
 function updateEmbButtons() {
   const $list       = document.getElementById('cad_e_list');
-  const hasSel      = !!($list && $list.value && $list.value !== ''); // FiscalId/EmbarcacaoId selecionado
+  const hasSel      = !!($list && $list.value && $list.value !== '');
   const $btnEditar  = document.getElementById('btnEmbEditar');
   const $btnExcluir = document.getElementById('btnEmbExcluir');
 
@@ -914,36 +936,32 @@ function updateEmbButtons() {
   if ($btnExcluir) $btnExcluir.disabled = !hasSel;
 }
 
-
+// Reseta interface de embarcações
 function embResetUI(){
   EMB_EDITING_ID = null;
   embSetEditing(false);
   const n = document.getElementById('cad_e_nome');     if (n) n.value = '';
   const p = document.getElementById('cad_e_primeira'); if (p) p.value = '';
   const t = document.getElementById('cad_e_tipo');     if (t) t.value = '';
-  // limpa seleção
   const sel = document.getElementById('cad_e_list');
   if (sel) sel.value = '';
-
   updateEmbButtons();
 }
 
+// Entra em modo de edição de embarcação
 function embEnterEditMode(id, nome, primeiraEntradaPorto, tipoEmbarcacao) {
   try {
-    // Preenchimento dos inputs (IDs já usados no projeto)
     const $nome    = document.getElementById('cad_e_nome');
-    const $primeira= document.getElementById('cad_e_primeira');   // data (AAAA-MM-DD)
+    const $primeira= document.getElementById('cad_e_primeira');
     const $tipo    = document.getElementById('cad_e_tipo');
 
     if ($nome)     $nome.value     = (nome ?? '').toString();
     if ($primeira) $primeira.value = (primeiraEntradaPorto ?? '').toString();
     if ($tipo)     $tipo.value     = (tipoEmbarcacao ?? '').toString();
 
-    // Guarda o ID em atributo data-* para uso pelo Confirmar
     const $root = document.getElementById('cad_embarcacoes_root') || document.body;
     $root.dataset.embEditingId = String(id);
 
-    // Ajuste de visibilidade/estado dos botões (espelha fluxo de Fiscais)
     const hide  = el => el && (el.style.display = 'none');
     const show  = el => el && (el.style.display = '');
     const dis   = (el, v=true) => el && (el.disabled = v);
@@ -965,99 +983,129 @@ function embEnterEditMode(id, nome, primeiraEntradaPorto, tipoEmbarcacao) {
   }
 }
 
+// Controla visibilidade dos botões de edição de embarcação
+function embSetEditing(on){
+  const $ = id => document.getElementById(id);
 
-function setTab(id){
-  document.getElementById("msgNovaPS").innerText = "";
-  const leavingCad = !document.getElementById(`tab-${id}`)?.classList.contains('active')
-                     && document.getElementById('tab-cadastros')?.classList.contains('active');
-  $$('.tablink').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
-  $$('.tab').forEach(t=>t.classList.toggle('active', t.id===`tab-${id}`));
-  // se saiu de Cadastros, reseta o estado de edição/exclusão
-  if (id === 'cadastros') {
-    renderFiscalList();
-    renderEmbList();
-  } else {
-    fiscalResetUI();
-    embResetUI(); 
-    }
-  }
+  const bSave   = $('btnSaveEmb');
+  const bEdit   = $('btnEmbEditar');
+  const bDel    = $('btnEmbExcluir');
+  const bOk     = $('btnEmbConfirma');
+  const bCancel = $('btnEmbCancela');
+  const boxEdit = $('embEditActions');
 
-function setSub(id){
-  $$('.sublink').forEach(b=>b.classList.toggle('active', b.dataset.sub===id));
-  $$('.subtab').forEach(t=>t.classList.toggle('active', t.id===`sub-${id}`));
-}
-function setUser(name){ $('#userName').textContent = name || ''; }
+  // Visibilidade
+  if (bSave)   bSave.style.display   = on ? 'none' : '';
+  if (bDel)    bDel.style.display    = on ? 'none' : '';
+  if (bOk)     bOk.style.display     = on ? '' : 'none';
+  if (bCancel) bCancel.style.display = on ? '' : 'none';
+  if (boxEdit) boxEdit.style.display = on ? 'flex' : 'none';
 
-function renderLista(items){
-  const list = $('#listaPS');
-  list.innerHTML = '';
-  for (const ps of items){
-    const li = document.createElement('li');
-    const papel = (ps.FiscalEmbarcandoId===CTX?.fiscalId) ? 'Embarque'
-             : (ps.FiscalDesembarcandoId===CTX?.fiscalId) ? 'Desembarque' : '';
-    // monta numero/ano - embarcação
-    const ano = ps.DataEmissao ? new Date(ps.DataEmissao).getFullYear() : '----';
-    const numero = ps.NumeroPS || ps.PassagemId || '---';
-
-    li.innerHTML = `
-      <div><strong>${numero} - ${ps.EmbarcacaoNome}</strong></div>
-      <div class="tag">${ps.PeriodoInicio} a ${ps.PeriodoFim}</div>
-      <div>${papel} - ${ps.DataEmissao}</div>
-      <div>Status: <strong>${ps.Status}</strong></div>
-    `;
-
-    // clique abre a aba Passagem e carrega a PS correspondente
-    li.onclick = () => {
-      setTab('passagem');
-      carregarPS(ps.PassagemId);
-    };
-
-    list.appendChild(li);
-  }
+  // Habilitação
+  if (bSave)   bSave.disabled   = on;
+  if (bDel)    bDel.disabled    = on;
+  if (bEdit)   bEdit.disabled   = on;
+  if (bOk)     bOk.disabled     = !on;
+  if (bCancel) bCancel.disabled = !on;
 }
 
+// Inicia edição de embarcação
+function onEmbEditar(){
+  const sel = document.getElementById('cad_e_list');
+  if (!sel || !sel.value) return;
+  const id = Number(sel.value);
+  const it = (EMB||[]).find(e => e.EmbarcacaoId === id);
+  if (!it) return;
 
-function opt(v,t){ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; }
-function togglePsForm(show){ $('#psPlaceholder').classList.toggle('hidden', show); $('#psForm').classList.toggle('hidden', !show); }
+  EMB_EDITING_ID = id;
+  document.getElementById('cad_e_nome').value = it.Nome || '';
+  document.getElementById('cad_e_primeira').value = it.PrimeiraEntradaPorto ? String(it.PrimeiraEntradaPorto).slice(0,10) : '';
+  document.getElementById('cad_e_tipo').value = it.TipoEmbarcacao || '';
 
-async function carregarPS(id){
-  const ps = await api.ps(id); if (ps.error){ alert(ps.error); return; }
-  CUR_PS = ps; togglePsForm(true);
-  $('#fNumero').value = ps.NumeroPS || ps.PassagemId || '';
-  $('#fData').value = ps.DataEmissao || '';
-  $('#fInicioPS').value = ps.PeriodoInicio;
-  $('#fFimPS').value = ps.PeriodoFim;
-  $('#fStatus').value = ps.Status;
+  embSetEditing(true);
+}
 
-  const embSel = $('#fEmb'); embSel.innerHTML=''; EMB.forEach(e=>embSel.appendChild(opt(e.EmbarcacaoId, e.Nome))); embSel.value = ps.EmbarcacaoId;
-  $('#fEmb').disabled = true;   
+// Confirma edição de embarcação
+async function onEmbConfirma() {
+ const id = EMB_EDITING_ID;
+  if (!id) return;
 
-  const embCF = $('#fEmbC'); embCF.innerHTML=''; FISCAIS.forEach(f=>embCF.appendChild(opt(f.FiscalId, `${f.Chave}-${f.Nome}`))); if (ps.FiscalEmbarcandoId) embCF.value = ps.FiscalEmbarcandoId;
-  $('#fDesCNome').value = ps.FiscalDesembarcandoNome || '';
-   
-  
+  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
+  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
+  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim();
 
+  if (!Nome) { alert('Informe o Nome da embarcação.'); return; }
+  if (TipoEmbarcacao && TipoEmbarcacao.length > 20) {
+    alert('Tipo da Embarcação deve ter no máximo 20 caracteres.');
+    return;
+  }
 
+  const r = await fetch(`/api/embarcacoes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ Nome, PrimeiraEntradaPorto, TipoEmbarcacao })
+  });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) { alert(j.error || 'Falha ao salvar alterações'); return; }
 
-  const canEdit = (ps.Status==='RASCUNHO') &&
-    (new Date() <= new Date(new Date(ps.PeriodoFim).getTime()+24*60*60*1000)) &&
-    (ps.FiscalDesembarcandoId===CTX.fiscalId);
-  ['#fNumero','#fData','#fInicioPS','#fFimPS','#fEmbC','#fDesCNome'].forEach(sel => $(sel).disabled = !canEdit);
-  $('#btnSalvar').disabled = !canEdit;
-  $('#btnFinalizar').disabled = !canEdit;
-  $('#btnCopiar').disabled = !(ps.Status==='FINALIZADA' && ps.FiscalEmbarcandoId===CTX.fiscalId);
-  $('#btnExcluirRasc').disabled = !(ps.Status === 'RASCUNHO');
-  applyDesembarcanteLock(); // <-- acrescentar aqui
-  carregarPorto_11a16(ps.PassagemId);
-  carregarPorto_17a110(ps.PassagemId).then(()=> aplicarLockPorto());
-} 
+  try { EMB = await api.embarcacoes(); } catch(_) {}
+  if (typeof renderEmbList === 'function') renderEmbList();
 
+  document.getElementById('cad_e_primeira').value = '';
+  document.getElementById('cad_e_tipo').value = '';
+  document.getElementById('cad_e_nome').value = '';
+  embResetUI();
+  renderEmbList();
+  alert('Alterações salvas.');
+}
 
+// Cancela edição de embarcação
+function onEmbCancela() {
+  embResetUI();
+}
 
+// Exclui embarcação
+async function onEmbExcluir() {
+  const sel = document.getElementById('cad_e_list');
+  if (!sel || !sel.value) return;
+  const id = Number(sel.value);
+  const it = EMB.find(e => e.EmbarcacaoId === id);
+  if (!it) return;
 
+  const btnSave = document.getElementById('btnSaveEmb');
+  const btnEd   = document.getElementById('btnEmbEditar');
+  const btnEx   = document.getElementById('btnEmbExcluir');
+  if (btnSave) btnSave.disabled = true;
+  if (btnEd)   btnEd.disabled   = true;
+
+  const ok = window.confirm(`Confirma a exclusão da embarcação "${it.Nome}"?`);
+  if (!ok) {
+    if (btnSave) btnSave.disabled = false;
+    if (btnEd)   btnEd.disabled   = false;
+    updateEmbButtons();
+    return;
+  }
+
+  const r = await fetch(`/api/embarcacoes/${id}`, { method: 'DELETE' });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) {
+    alert(j.error || 'Falha ao excluir. Verifique se não há PS vinculadas.');
+    if (btnSave) btnSave.disabled = false;
+    if (btnEd)   btnEd.disabled   = false;
+    updateEmbButtons();
+    return;
+  }
+
+  try { EMB = await api.embarcacoes(); } catch(_) {}
+  renderEmbList();
+  embResetUI();
+  alert('Embarcação excluída.');
+}
+
+// Salva nova embarcação
 async function saveEmbarcacao() {
   const Nome = document.getElementById('cad_e_nome')?.value?.trim();
-  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null; // yyyy-mm-dd
+  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
   const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim() || null;
 
   if (!Nome) { alert('Informe o tipo,nome e data da primeiro porto da embarcação.'); return; }
@@ -1075,12 +1123,10 @@ async function saveEmbarcacao() {
     const j = await r.json();
     if (!r.ok) { alert(j.error || 'Erro ao salvar'); return; }
 
-    // limpa inputs
     document.getElementById('cad_e_nome').value = '';
     document.getElementById('cad_e_primeira').value = '';
     document.getElementById('cad_e_tipo').value = '';
 
-    // recarrega lista
     try { EMB = await api.embarcacoes(); } catch(_) {}
     if (typeof renderEmbList === 'function') renderEmbList();
 
@@ -1090,7 +1136,95 @@ async function saveEmbarcacao() {
   }
 }
 
+// ===================================================================================================
+// GESTÃO DE PASSAGENS - Interface Principal
+// ===================================================================================================
 
+// Controles de navegação
+function setTab(id){
+  document.getElementById("msgNovaPS").innerText = "";
+  const leavingCad = !document.getElementById(`tab-${id}`)?.classList.contains('active')
+                     && document.getElementById('tab-cadastros')?.classList.contains('active');
+  $$('.tablink').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  $$('.tab').forEach(t=>t.classList.toggle('active', t.id===`tab-${id}`));
+  
+  if (id === 'cadastros') {
+    renderFiscalList();
+    renderEmbList();
+  } else {
+    fiscalResetUI();
+    embResetUI(); 
+  }
+}
+
+function setSub(id){
+  $$('.sublink').forEach(b=>b.classList.toggle('active', b.dataset.sub===id));
+  $$('.subtab').forEach(t=>t.classList.toggle('active', t.id===`sub-${id}`));
+}
+
+function setUser(name){ $('#userName').textContent = name || ''; }
+
+// Renderiza lista de PS na tela de consultas
+function renderLista(items){
+  const list = $('#listaPS');
+  list.innerHTML = '';
+  for (const ps of items){
+    const li = document.createElement('li');
+    const papel = (ps.FiscalEmbarcandoId===CTX?.fiscalId) ? 'Embarque'
+             : (ps.FiscalDesembarcandoId===CTX?.fiscalId) ? 'Desembarque' : '';
+    const ano = ps.DataEmissao ? new Date(ps.DataEmissao).getFullYear() : '----';
+    const numero = ps.NumeroPS || ps.PassagemId || '---';
+
+    li.innerHTML = `
+      <div><strong>${numero} - ${ps.EmbarcacaoNome}</strong></div>
+      <div class="tag">${ps.PeriodoInicio} a ${ps.PeriodoFim}</div>
+      <div>${papel} - ${ps.DataEmissao}</div>
+      <div>Status: <strong>${ps.Status}</strong></div>
+    `;
+
+    li.onclick = () => {
+      setTab('passagem');
+      carregarPS(ps.PassagemId);
+    };
+
+    list.appendChild(li);
+  }
+}
+
+// Utilitários para formulários
+function opt(v,t){ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; }
+function togglePsForm(show){ $('#psPlaceholder').classList.toggle('hidden', show); $('#psForm').classList.toggle('hidden', !show); }
+
+// Carrega dados de uma PS específica
+async function carregarPS(id){
+  const ps = await api.ps(id); if (ps.error){ alert(ps.error); return; }
+  CUR_PS = ps; togglePsForm(true);
+  $('#fNumero').value = ps.NumeroPS || ps.PassagemId || '';
+  $('#fData').value = ps.DataEmissao || '';
+  $('#fInicioPS').value = ps.PeriodoInicio;
+  $('#fFimPS').value = ps.PeriodoFim;
+  $('#fStatus').value = ps.Status;
+
+  const embSel = $('#fEmb'); embSel.innerHTML=''; EMB.forEach(e=>embSel.appendChild(opt(e.EmbarcacaoId, e.Nome))); embSel.value = ps.EmbarcacaoId;
+  $('#fEmb').disabled = true;   
+
+  const embCF = $('#fEmbC'); embCF.innerHTML=''; FISCAIS.forEach(f=>embCF.appendChild(opt(f.FiscalId, `${f.Chave}-${f.Nome}`))); if (ps.FiscalEmbarcandoId) embCF.value = ps.FiscalEmbarcandoId;
+  $('#fDesCNome').value = ps.FiscalDesembarcandoNome || '';
+   
+  const canEdit = (ps.Status==='RASCUNHO') &&
+    (new Date() <= new Date(new Date(ps.PeriodoFim).getTime()+24*60*60*1000)) &&
+    (ps.FiscalDesembarcandoId===CTX.fiscalId);
+  ['#fNumero','#fData','#fInicioPS','#fFimPS','#fEmbC','#fDesCNome'].forEach(sel => $(sel).disabled = !canEdit);
+  $('#btnSalvar').disabled = !canEdit;
+  $('#btnFinalizar').disabled = !canEdit;
+  $('#btnCopiar').disabled = !(ps.Status==='FINALIZADA' && ps.FiscalEmbarcandoId===CTX.fiscalId);
+  $('#btnExcluirRasc').disabled = !(ps.Status === 'RASCUNHO');
+  applyDesembarcanteLock();
+  carregarPorto_11a16(ps.PassagemId);
+  carregarPorto_17a110(ps.PassagemId).then(()=> aplicarLockPorto());
+} 
+
+// Ações sobre PS
 async function salvarPS(){
   if (!CUR_PS) return;
   const payload = {
@@ -1139,23 +1273,20 @@ async function excluirPSAtualRascunho(){
   }
 
   alert('Rascunho excluído.');
-  await buscar();            // atualiza lista em Consultas
-  setTab('consultas');       // volta para Consultas
-  togglePsForm(false);       // esconde formulário
+  await buscar();
+  setTab('consultas');
+  togglePsForm(false);
 }
 
-
-
-
-
+// Modals para nova PS
 function abrirModalNovaPS(){
   document.getElementById("modalNovaPS").classList.remove("hidden");
-  // ↓ DESATIVA “Início” e “Cadastros”
   const btnInicio   = document.querySelector('.topnav .tablink[data-tab="consultas"]');
   const btnCadastro = document.querySelector('.topnav .tablink[data-tab="cadastros"]');
   if (btnInicio)   btnInicio.disabled   = true;
   if (btnCadastro) btnCadastro.disabled = true;
 }
+
 function fecharModalNovaPS(){
   document.getElementById("modalNovaPS").classList.add("hidden");
   const btnInicio   = document.querySelector('.topnav .tablink[data-tab="consultas"]');
@@ -1164,17 +1295,14 @@ function fecharModalNovaPS(){
   if (btnCadastro) btnCadastro.disabled = false;
 }
 
-
-//async function novaPS(){
+// Cria nova PS
 async function novaPS(embIdParam){
   if (!EMB.length){ 
     alert('Cadastre ao menos uma embarcação.'); 
     return; 
   }
 
-  
   const embSel = document.getElementById('fEmb');
-  //const embId = embSel && embSel.value ? Number(embSel.value) : EMB[0].EmbarcacaoId;
   const embId = (typeof embIdParam === 'number' && embIdParam > 0)
    ? embIdParam
    : (embSel && embSel.value ? Number(embSel.value) : EMB[0].EmbarcacaoId);
@@ -1185,16 +1313,13 @@ async function novaPS(embIdParam){
     return;
   }
 
-  // calcula a próxima PS com base no primeiro porto
   const dados = calcularProximaPS(embarcacao.PrimeiraEntradaPorto);
 
-  // 🔹 Pré-preenche imediatamente os campos no formulário
   document.getElementById("fInicioPS").value = dados.inicio;
   document.getElementById("fFimPS").value    = dados.fim;
   document.getElementById("fData").value     = dados.emissao;
   document.getElementById("fNumero").value   = dados.numeroAno;
 
-  // prepara o payload
   const payload = { 
     EmbarcacaoId: embId, 
     PeriodoInicio: dados.inicio, 
@@ -1226,7 +1351,6 @@ async function novaPS(embIdParam){
   return; 
 }
 
-// limpar mensagem caso não tenha erro
 document.getElementById("msgNovaPS").innerText = "";
 
   await buscar();
@@ -1234,216 +1358,16 @@ document.getElementById("msgNovaPS").innerText = "";
   setTab('passagem');
 }
 
-
-
-function embSetEditing(on){
-  const $ = id => document.getElementById(id);
-
-  const bSave   = $('btnSaveEmb');
-  const bEdit   = $('btnEmbEditar');
-  const bDel    = $('btnEmbExcluir');
-  const bOk     = $('btnEmbConfirma');
-  const bCancel = $('btnEmbCancela');
-  const boxEdit = $('embEditActions');           // << container dos botões de edição
-
-  // 1) Visibilidade (display)
-  if (bSave)   bSave.style.display   = on ? 'none' : '';
-  if (bDel)    bDel.style.display    = on ? 'none' : '';
-  if (bOk)     bOk.style.display     = on ? '' : 'none';
-  if (bCancel) bCancel.style.display = on ? '' : 'none';
-  if (boxEdit) boxEdit.style.display = on ? 'flex' : 'none';  // << TORNAR CONTAINER VISÍVEL EM EDIÇÃO
-
-
-  // 2) Habilitação (disabled)
-  if (bSave)   bSave.disabled   = on;     // em edição: desativa Salvar
-  if (bDel)    bDel.disabled    = on;     // em edição: desativa Excluir
-  if (bEdit)   bEdit.disabled   = on;     // em edição: desativa Editar
-  if (bOk)     bOk.disabled     = !on;    // Confirmar só habilitado em edição
-  if (bCancel) bCancel.disabled = !on;    // Cancelar só habilitado em edição
-}
-
-
-
-function onEmbEditar(){
-  const sel = document.getElementById('cad_e_list');
-  if (!sel || !sel.value) return;
-  const id = Number(sel.value);
-  const it = (EMB||[]).find(e => e.EmbarcacaoId === id);
-  if (!it) return;
-
-  EMB_EDITING_ID = id;
-  document.getElementById('cad_e_nome').value = it.Nome || '';
-  document.getElementById('cad_e_primeira').value = it.PrimeiraEntradaPorto ? String(it.PrimeiraEntradaPorto).slice(0,10) : '';
-  document.getElementById('cad_e_tipo').value = it.TipoEmbarcacao || '';
-
-  embSetEditing(true); // ← AQUI é onde os botões Salvar/Excluir ficam inativos
-}
-
-// Confirmar (salvar alterações)
-
-async function onEmbConfirma() {
- const id = EMB_EDITING_ID; // ou a sua variável correspondente
-  if (!id) return;
-
-  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
-  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null; // yyyy-mm-dd
-  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim();
-
-  if (!Nome) { alert('Informe o Nome da embarcação.'); return; }
-  if (TipoEmbarcacao && TipoEmbarcacao.length > 20) {
-    alert('Tipo da Embarcação deve ter no máximo 20 caracteres.');
-    return;
-  }
-
-  const r = await fetch(`/api/embarcacoes/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ Nome, PrimeiraEntradaPorto, TipoEmbarcacao })
-  });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) { alert(j.error || 'Falha ao salvar alterações'); return; }
-
-  // recarrega a lista e restaura UI
-  try { EMB = await api.embarcacoes(); } catch(_) {}
-  if (typeof renderEmbList === 'function') renderEmbList();
-
-  // limpar campos e restaurar botões (use suas funções utilitárias existentes)
-  document.getElementById('cad_e_primeira').value = '';
-  document.getElementById('cad_e_tipo').value = '';
-  document.getElementById('cad_e_nome').value = '';
-  embResetUI();
-  renderEmbList();
-  alert('Alterações salvas.');
-}
-
-// Cancelar edição
-function onEmbCancela() {
-  embResetUI();
-}
-
-// Excluir embarcação
-async function onEmbExcluir() {
-  const sel = document.getElementById('cad_e_list');
-  if (!sel || !sel.value) return;
-  const id = Number(sel.value);
-  const it = EMB.find(e => e.EmbarcacaoId === id);
-  if (!it) return;
-
-  // desativa botões enquanto a caixa de diálogo está aberta
-  const btnSave = document.getElementById('btnSaveEmb');
-  const btnEd   = document.getElementById('btnEmbEditar');
-  const btnEx   = document.getElementById('btnEmbExcluir');
-  if (btnSave) btnSave.disabled = true;
-  if (btnEd)   btnEd.disabled   = true;
-
-  const ok = window.confirm(`Confirma a exclusão da embarcação "${it.Nome}"?`);
-  if (!ok) {
-    if (btnSave) btnSave.disabled = false;
-    if (btnEd)   btnEd.disabled   = false;
-    updateEmbButtons();
-    return;
-  }
-
-  // DELETE /api/embarcacoes/:id
-  const r = await fetch(`/api/embarcacoes/${id}`, { method: 'DELETE' });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) {
-    alert(j.error || 'Falha ao excluir. Verifique se não há PS vinculadas.');
-    if (btnSave) btnSave.disabled = false;
-    if (btnEd)   btnEd.disabled   = false;
-    updateEmbButtons();
-    return;
-  }
-
-  // refresh lista e UI
-  try { EMB = await api.embarcacoes(); } catch(_) {}
-  renderEmbList();
-  embResetUI();
-  alert('Embarcação excluída.');
-}
-
-
 async function buscar(){
-  
   const itens = await api.listarPS($('#fInicio').value, $('#fFim').value);
   renderLista(itens);
 }
 
-// --- [ACRÉSCIMO] Salvamento de Fiscais ---
-async function saveFiscal(){
-  const nome = document.getElementById('cad_f_nome')?.value?.trim();
-  const chave = document.getElementById('cad_f_ch')?.value?.trim();
-  const telefone = document.getElementById('cad_f_tel')?.value?.trim();
+// ===================================================================================================
+// EVENT LISTENERS E INICIALIZAÇÃO
+// ===================================================================================================
 
-  if (!nome || !chave) { alert('Preencha Nome e Chave.'); return; }
-  if (chave.length !== 4) { alert('Chave deve ter 4 caracteres.'); return; }
-  if (telefone && telefone.length > 15) { alert('Telefone deve ter no máximo 15 caracteres.'); return; }
-
-  const r = await fetch('/api/fiscais', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ Nome:nome, Chave:chave, Telefone:telefone || '' })
-  });
-  const j = await r.json();
-  if (!r.ok) { alert(j.error || 'Erro ao salvar'); return; }
-
-  // Limpa campos e (se existir) recarrega a lista local
-  document.getElementById('cad_f_nome').value = '';
-  document.getElementById('cad_f_ch').value = '';
-  document.getElementById('cad_f_tel').value = '';
-
-  try {
-    if (typeof api?.fiscais === 'function') {
-      // mantém compatibilidade com seu carregamento atual
-      FISCAIS = await api.fiscais();
-    }
-  } catch (_) {}
-  alert('Fiscal salvo.');
-  renderFiscalList();
-
-};
-
-// Binder discreto sem interferir no restante
-
-// === Embarcações: binds de UI (lista e botões) ===
-// Observação: as funções de ação (onEmbSalvar/Editar/Excluir/Confirmar/Cancelar)
-// já existem no projeto. Aqui apenas conectamos os eventos.
-document.addEventListener('DOMContentLoaded', () => {
-  const $list       = document.getElementById('cad_e_list');
-  const $btnSalvar  = document.getElementById('btnSaveEmb');
-  const $btnEditar  = document.getElementById('btnEmbEditar');
-  const $btnExcluir = document.getElementById('btnEmbExcluir');
-  const $btnConf    = document.getElementById('btnEmbConfirma');
-  const $btnCanc    = document.getElementById('btnEmbCancela');
-
-  if ($list) {
-    // Habilita/desabilita Editar/Excluir conforme seleção
-    $list.addEventListener('change', updateEmbButtons);
-    // Inicializa estado ao carregar
-    updateEmbButtons();
-  }
-
-  if ($btnSalvar && typeof onEmbSalvar === 'function') {
-    $btnSalvar.addEventListener('click', onEmbSalvar);
-  }
-  if ($btnEditar && typeof onEmbEditar === 'function') {
-    $btnEditar.addEventListener('click', onEmbEditar);
-  }
-  if ($btnExcluir && typeof onEmbExcluir === 'function') {
-    $btnExcluir.addEventListener('click', onEmbExcluir);
-  }
-  if ($btnConf && typeof onEmbConfirma === 'function') {
-    $btnConf.addEventListener('click', onEmbConfirma);
-  }
-  if ($btnCanc && typeof onEmbCancela === 'function') {
-    $btnCanc.addEventListener('click', onEmbCancela);
-  }
-});
-
-
-
-
-
+// Event listeners para fiscais
 document.addEventListener('DOMContentLoaded', () => {
   const selF = document.getElementById('cad_f_list');
   if (selF) selF.addEventListener('change', updateFiscalButtons);
@@ -1459,16 +1383,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const bNoF = document.getElementById('btnFiscalCancela');
   if (bNoF) bNoF.addEventListener('click', onFiscalCancela);
+
+  const btnSaveFiscal = document.getElementById('btnSaveFiscal');
+  if (btnSaveFiscal) btnSaveFiscal.addEventListener('click', saveFiscal);
 });
 
+// Event listeners para embarcações
 document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('btnSaveFiscal');
-  if (btn) btn.addEventListener('click', saveFiscal);
+  const $list       = document.getElementById('cad_e_list');
+  const $btnSalvar  = document.getElementById('btnSaveEmb');
+  const $btnEditar  = document.getElementById('btnEmbEditar');
+  const $btnExcluir = document.getElementById('btnEmbExcluir');
+  const $btnConf    = document.getElementById('btnEmbConfirma');
+  const $btnCanc    = document.getElementById('btnEmbCancela');
+
+  if ($list) {
+    $list.addEventListener('change', updateEmbButtons);
+    updateEmbButtons();
+  }
+
+  if ($btnSalvar) $btnSalvar.addEventListener('click', saveEmbarcacao);
+  if ($btnEditar) $btnEditar.addEventListener('click', onEmbEditar);
+  if ($btnExcluir) $btnExcluir.addEventListener('click', onEmbExcluir);
+  if ($btnConf) $btnConf.addEventListener('click', onEmbConfirma);
+  if ($btnCanc) $btnCanc.addEventListener('click', onEmbCancela);
 });
 
-
-
-
+// Event listeners para administração de PS
 document.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('admin_ps_list');
   if (sel) sel.addEventListener('change', updateAdminPSButtons);
@@ -1476,19 +1417,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (del) del.addEventListener('click', onAdminPSDelete);
 });
 
-
-document.addEventListener('DOMContentLoaded', () => {
-  const btnEmb = document.getElementById('btnSaveEmb');
-  if (btnEmb) btnEmb.addEventListener('click', saveEmbarcacao);
-});
-
-
-
-// Events
+// Event listeners principais
 $$('.tablink').forEach(b => b.onclick = ()=> setTab(b.dataset.tab));
 $$('.sublink').forEach(b => b.onclick = ()=> setSub(b.dataset.sub));
 $('#btnBuscar').onclick = buscar;
-//$('#btnNova').onclick = novaPS;
 $('#btnNova').onclick = onNovaPS_Guard;
 $('#btnSalvar').onclick = salvarPS;
 $('#btnFinalizar').onclick = finalizarPS;
@@ -1497,8 +1429,7 @@ $('#btnModalNovaCancelar').onclick  = fecharModalNovaPS;
 $('#btnModalNovaConfirmar').onclick = confirmarModalNovaPS;
 $('#btnExcluirRasc').onclick = excluirPSAtualRascunho;
 
-
-// PORTO — binds
+// Event listeners para Porto
 $('#btnAddEq')   && ($('#btnAddEq').onclick   = ()=> addRowEq());
 $('#btnAddEM')   && ($('#btnAddEM').onclick   = ()=> addRowEM());
 $('#btnAddDM')   && ($('#btnAddDM').onclick   = ()=> addRowDM());
@@ -1516,6 +1447,7 @@ $('#btnSalvarPorto') && ($('#btnSalvarPorto').onclick = async ()=>{
   }
 });
 
+// Controles de visibilidade das listas do Porto
 function applyPortoVisibilityLists(){
   const pairs = [
     {chk:'#eqNaoPrevisto', tbl:'#tblEq', btn:'#btnAddEq'},
@@ -1530,22 +1462,18 @@ function applyPortoVisibilityLists(){
     const on = !!(chk && chk.checked);
     if (tbl){ 
       tbl.style.display = on ? 'none' : '';
-      // desabilita/habilita todos os inputs da tabela
       tbl.querySelectorAll('input, textarea, select, button').forEach(el=> el.disabled = on);
     }
     if (btn){ btn.style.display = on ? 'none' : ''; btn.disabled = on; }
   });
 }
 
-// listeners de mudança nas 4 checkboxes:
 ['#eqNaoPrevisto','#emNaoPrevisto','#dmNaoPrevisto','#omNaoPrevisto'].forEach(sel=>{
   const el = document.querySelector(sel);
   if (el) el.addEventListener('change', applyPortoVisibilityLists);
 });
 
-
-
-// Ao trocar a sub-aba, carregar dados do PORTO
+// Carregamento automático do Porto ao trocar sub-aba
 const _prevSetSub = setSub;
 setSub = function(id){
   _prevSetSub(id);
@@ -1554,8 +1482,10 @@ setSub = function(id){
     carregarPorto_17a110(CUR_PS.PassagemId).then(()=> aplicarLockPorto());
   }
 };
-// Fim PORTO — binds
 
+// ===================================================================================================
+// AUTENTICAÇÃO E INICIALIZAÇÃO
+// ===================================================================================================
 
 // Login modal
 const modal = $('#loginModal');
@@ -1568,15 +1498,14 @@ $('#btnLogin').onclick = async ()=>{
   modal.classList.add('hidden');
   await bootAfterAuth();
 };
-// Fim Login modal
 
-// Novo boot que chama após o login manual
+// Boot após autenticação manual
 async function bootAfterAuth(){
   const me = await api.me();
   if (me.error){ $('#loginMsg').textContent = me.error; modal.classList.remove('hidden'); return; }
   AUTH_MODE = me.mode || 'manual';
   CTX = me.me; setUser(CTX?.nome || '');
-  applyDesembarcanteLock(); // <-- aplica logo após sabermos o modo e o usuário
+  applyDesembarcanteLock();
   EMB = await api.embarcacoes();
   renderEmbList();
   FISCAIS = await api.fiscais(); 
@@ -1584,8 +1513,7 @@ async function bootAfterAuth(){
   refreshUserPhoto();
   await adminLoadPS();
   await buscar();
-}// Fim boot após login manual
-
+}
 
 // Boot inicial
 async function boot(){
@@ -1599,9 +1527,9 @@ async function boot(){
     return;
   }
   if (me.me){
-    AUTH_MODE = me.mode || 'manual';            // <-- NOVO
+    AUTH_MODE = me.mode || 'manual';
     CTX = me.me; setUser(CTX?.nome || '');
-    applyDesembarcanteLock();                   // <-- NOVO
+    applyDesembarcanteLock();
     EMB = await api.embarcacoes();
     renderEmbList();
     FISCAIS = await api.fiscais(); 
@@ -1611,22 +1539,18 @@ async function boot(){
   }
 }
 
-// Foto do usuário (pega de /api/me/photo). Se não houver, mantém escondido.
+// Foto do usuário
 function refreshUserPhoto() {
   const img = document.getElementById('userPhoto');
   if (!img) return;
   img.onerror = () => { img.style.display = 'none'; };
   img.onload  = () => { img.style.display = 'inline-block'; };
-  // cache-buster pra não ficar imagem antiga
   img.src = '/api/me/photo?t=' + Date.now();
 }
 
-// chama após a página subir (sem interferir no seu bootstrap atual)
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(refreshUserPhoto, 150);
 });
 
-
-
-
+// Inicialização
 boot();
