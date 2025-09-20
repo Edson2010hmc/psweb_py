@@ -285,6 +285,8 @@ const AdministradoresModule = (function() {
         try {
             await api.delete(id);
             await loadAdministradores();
+            if (btnSave) btnSave.disabled = false;
+            if (btnEdit) btnEdit.disabled = false;
             resetUI();
             showSuccess('Administrador excluído com sucesso');
             

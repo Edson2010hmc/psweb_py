@@ -285,6 +285,8 @@ const FiscaisModule = (function() {
         try {
             await api.delete(id);
             await loadFiscais();
+            if (btnSave) btnSave.disabled = false;
+            if (btnEdit) btnEdit.disabled = false;
             resetUI();
             showSuccess('Fiscal excluído com sucesso');
             
