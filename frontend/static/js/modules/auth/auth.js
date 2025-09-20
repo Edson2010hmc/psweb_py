@@ -1,0 +1,1 @@
+//arquivo: frontend/static/js/modules/auth/auth.js
