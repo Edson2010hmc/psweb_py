@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-API de Administradores - TODAS as regras de negócio e validações
+API de Administradores - CORRIGIDA para usar mesmo padrão dos fiscais
 Arquivo: backend/app/api/v1/administradores_api.py
-Baseado no padrão dos fiscais
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -135,7 +134,7 @@ async def list_administradores():
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_administrador(administrador_data: AdministradorCreate):
-    """Cria novo administrador - TODAS AS VALIDAÇÕES DOS fiscais"""
+    """Cria novo administrador - CORRIGIDO com padrão dos fiscais"""
     import traceback
     
     try:
@@ -152,40 +151,52 @@ async def create_administrador(administrador_data: AdministradorCreate):
             )
         
         print(f"🔸 INSERINDO: No banco de dados")
-        # Insere no banco
-        sql = "INSERT INTO ADMINISTRADORES (NOME, CHAVE, TELEFONE) VALUES (?,?,?)"
+        
+        # === CORREÇÃO: Usar o MESMO padrão que funciona nos fiscais ===
+        sql = """
+            INSERT INTO ADMINISTRADORES (NOME, CHAVE, TELEFONE) 
+            VALUES (?, ?, ?) 
+            RETURNING ADMINISTRADORID
+        """
+        
         params = [
-            administrador_data.Nome,
-            administrador_data.Chave,
-            administrador_data.Telefone or ""
+            administrador_data.Nome.strip(),
+            administrador_data.Chave.upper(),
+            administrador_data.Telefone.strip() if administrador_data.Telefone else ''
         ]
         
-        affected = await db.execute_query(sql, params)
-        print(f"🔸 RESULTADO: {affected} linhas afetadas")
-        
-        if affected > 0:
-            # Busca o administrador criado para retornar
-            print(f"🔸 BUSCANDO: Administrador criado")
+        # Usa conexão direta como nos fiscais
+        connection = db.get_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(sql, params)
+            
+            # Firebird RETURNING clause
+            result = cursor.fetchone()
+            if not result:
+                raise Exception("Falha ao obter ID do administrador criado")
+            
+            new_id = result[0]
+            connection.commit()
+            
+            print(f"🔸 SUCESSO: Administrador criado com ID {new_id}")
+            
+            # Busca o administrador criado
             novo_administrador = await resolve_administrador_by_name(administrador_data.Nome)
-            print(f"🔸 ENCONTRADO: {novo_administrador}")
             
             if novo_administrador:
-                logger.info(f"Administrador criado: {administrador_data.Nome}")
+                logger.info(f"Administrador criado: {administrador_data.Nome} (ID: {new_id})")
                 result = {"ok": True, "AdministradorId": novo_administrador["AdministradorId"]}
                 print(f"🔸 RETORNANDO: {result}")
                 return result
             else:
-                print(f"🔸 ERRO: Administrador não encontrado após criação")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Administrador criado mas não encontrado"
-                )
-        else:
-            print(f"🔸 ERRO: Nenhuma linha afetada")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao salvar"
-            )
+                raise Exception("Administrador criado mas não encontrado")
+                
+        except Exception as e:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
             
     except HTTPException:
         print(f"🔸 HTTP EXCEPTION: Re-raising")
