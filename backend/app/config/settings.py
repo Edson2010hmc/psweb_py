@@ -20,8 +20,13 @@ class Settings:
     
     # Aplicação
     SECRET_KEY: str = "change-me-in-production"
-    USE_WINDOWS_AUTH: bool = True
+    USE_WINDOWS_AUTH: bool = True  # SEMPRE True - sistema requer autenticação Windows
     STORAGE_DIR: str = "../storage"
+    
+    # === NOVA CONFIGURAÇÃO DE AUTENTICAÇÃO ===
+    # Define qual campo será comparado com USERNAME do Windows
+    # Valores aceitos: "NOME" ou "CHAVE"
+    AUTH_FIELD: str = "NOME"  # Padrão: compara com o campo NOME
     
     # Servidor
     HOST: str = "127.0.0.1"
@@ -59,6 +64,13 @@ class Settings:
                                 value = int(value)
                             elif key in ['USE_WINDOWS_AUTH', 'DEBUG']:
                                 value = value.lower() in ['true', '1', 'yes']
+                            elif key == 'AUTH_FIELD':
+                                # Valida valores aceitos para AUTH_FIELD
+                                if value.upper() in ['NOME', 'CHAVE']:
+                                    value = value.upper()
+                                else:
+                                    print(f"Aviso: AUTH_FIELD inválido '{value}', usando padrão 'NOME'")
+                                    value = 'NOME'
                             
                             setattr(self, key, value)
         except Exception as e:

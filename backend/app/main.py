@@ -20,6 +20,8 @@ from app.config.database import init_database
 from app.api.v1 import fiscais_api, passagens_api
 from app.api.v1.embarcacoes_api import router as embarcacoes_router
 from app.api.v1.administradores_api import router as administradores_router
+from app.api.v1.auth_api import router as auth_router  # NOVA ROTA DE AUTENTICAÇÃO
+
 # Configurar logging
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +66,7 @@ except Exception as e:
     logger.error(f"Erro ao montar arquivos estáticos: {e}")
 
 # === INCLUIR TODAS AS APIs COM REGRAS DE NEGÓCIO REFATORADAS ===
+app.include_router(auth_router, tags=["Autenticação"])  # NOVO: Autenticação JavaScript
 app.include_router(fiscais_api.router, tags=["Fiscais"])
 app.include_router(embarcacoes_router, tags=["Embarcações"]) 
 app.include_router(passagens_api.router, tags=["Passagens"])
@@ -87,18 +90,10 @@ async def api_root():
         "message": "PSWEB Python API",
         "version": "2.0.0",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
+        "auth_mode": "client_javascript",
+        "auth_field": settings.AUTH_FIELD
     }
-
-# === ROTA TEMPORÁRIA PARA FOTO DO USUÁRIO ===
-@app.get("/api/me/photo", tags=["Sistema"])
-async def get_user_photo():
-    """
-    Rota temporária para foto do usuário
-    TODO: Implementar lógica de foto real
-    """
-    # Por enquanto, retorna 404 para não quebrar o frontend
-    raise HTTPException(status_code=404, detail="Foto não disponível")
 
 @app.get("/health", tags=["Sistema"])
 async def health_check():
@@ -122,7 +117,9 @@ async def health_check():
         "database": db_status,
         "version": "2.0.0",
         "static_dir": str(STATIC_DIR),
-        "templates_dir": str(TEMPLATES_DIR)
+        "templates_dir": str(TEMPLATES_DIR),
+        "auth_mode": "client_javascript",
+        "auth_field": settings.AUTH_FIELD
     }
 
 @app.on_event("startup")
@@ -135,6 +132,11 @@ async def startup_event():
     logger.info(f"Frontend directory: {FRONTEND_DIR}")
     logger.info(f"Templates directory: {TEMPLATES_DIR} (exists: {TEMPLATES_DIR.exists()})")
     logger.info(f"Static directory: {STATIC_DIR} (exists: {STATIC_DIR.exists()})")
+    
+    # Configurações de autenticação
+    logger.info(f"Modo de autenticação: client_javascript")
+    logger.info(f"Campo de autenticação: {settings.AUTH_FIELD}")
+    logger.info(f"Autenticação Windows forçada: {settings.USE_WINDOWS_AUTH}")
     
     if STATIC_DIR.exists():
         # Listar arquivos estáticos encontrados
@@ -166,6 +168,7 @@ if __name__ == "__main__":
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"Interface web: http://{settings.HOST}:{settings.PORT}")
     logger.info(f"API Docs: http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info(f"Autenticação: JavaScript Client ({settings.AUTH_FIELD})")
     
     uvicorn.run(
         "main:app",
