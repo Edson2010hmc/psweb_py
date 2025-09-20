@@ -1,105 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-API de Embarcações - TODAS as regras de negócio e validações
-Baseado no server.js linha por linha
+API de Embarcações - REFATORADO para usar Service Layer
 """
 
 from fastapi import APIRouter, HTTPException, status
-from typing import List, Optional
-from pydantic import BaseModel, Field, validator
-from datetime import date
+from typing import List
+from app.models.embarcacao import Embarcacao, EmbarcacaoCreate, EmbarcacaoUpdate
+from app.services.embarcacao_service import embarcacao_service
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/embarcacoes", tags=["Embarcações"])
 
-# === MODELS ===
-class EmbarcacaoCreate(BaseModel):
-    Nome: str = Field(..., min_length=1, max_length=200, description="Nome da embarcação")
-    PrimeiraEntradaPorto: Optional[date] = Field(None, description="Data da primeira entrada no porto")
-    TipoEmbarcacao: Optional[str] = Field(None, max_length=20, description="Tipo da embarcação máximo 20 caracteres")
-
-    @validator('Nome')
-    def validate_nome(cls, v):
-        """Nome é obrigatório"""
-        if not v or not v.strip():
-            raise ValueError('Nome da embarcação é obrigatório')
-        return v.strip()
-
-    @validator('TipoEmbarcacao')
-    def validate_tipo(cls, v):
-        """TipoEmbarcacao máximo 20 caracteres - REGRA DO server.js"""
-        if v and len(str(v)) > 20:
-            raise ValueError('Tipo da embarcação deve ter no máximo 20 caracteres')
-        return str(v)[:20] if v else None
-
-class EmbarcacaoUpdate(BaseModel):
-    Nome: str = Field(..., min_length=1, max_length=200)
-    PrimeiraEntradaPorto: Optional[date] = None
-    TipoEmbarcacao: Optional[str] = Field(None, max_length=20)
-
-    @validator('Nome')
-    def validate_nome(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Nome da embarcação é obrigatório')
-        return v.strip()
-
-    @validator('TipoEmbarcacao')
-    def validate_tipo(cls, v):
-        if v and len(str(v)) > 20:
-            raise ValueError('Tipo da embarcação deve ter no máximo 20 caracteres')
-        return str(v)[:20] if v else None
-
-class EmbarcacaoResponse(BaseModel):
-    EmbarcacaoId: int
-    Nome: str
-    PrimeiraEntradaPorto: Optional[str] = None
-    TipoEmbarcacao: Optional[str] = None
-
-# === BUSINESS LOGIC FUNCTIONS ===
-async def check_embarcacao_duplicates(nome: str, exclude_id: Optional[int] = None):
-    """Verifica duplicatas de Nome - REGRA DE NEGÓCIO"""
-    from app.config.database import db
-    
-    sql = "SELECT FIRST 1 EmbarcacaoId FROM EMBARCACOES WHERE UPPER(Nome) = UPPER(?)"
-    params = [nome.strip()]
-    
-    if exclude_id:
-        sql += " AND EmbarcacaoId <> ?"
-        params.append(exclude_id)
-    
-    rows = await db.execute_query(sql, params)
-    return len(rows) > 0
-
-async def check_embarcacao_ps_vinculos(embarcacao_id: int):
-    """Verifica se embarcação tem PS vinculadas"""
-    from app.config.database import db
-    
-    sql = "SELECT FIRST 1 PassagemId FROM PASSAGENS WHERE EmbarcacaoId = ?"
-    rows = await db.execute_query(sql, [embarcacao_id])
-    return len(rows) > 0
-
-# === API ENDPOINTS ===
-@router.get("/", response_model=List[EmbarcacaoResponse])
+@router.get("/", response_model=List[Embarcacao])
 async def list_embarcacoes():
-    """Lista todas embarcações - MESMA LÓGICA DO server.js"""
+    """Lista todas embarcações - USA SERVICE LAYER"""
     try:
-        from app.config.database import db
-        
-        sql = "SELECT EmbarcacaoId, Nome, PrimeiraEntradaPorto, TipoEmbarcacao FROM EMBARCACOES ORDER BY Nome"
-        rows = await db.execute_query(sql)
-        
-        embarcacoes = []
-        for row in rows:
-            embarcacoes.append(EmbarcacaoResponse(
-                EmbarcacaoId=row[0],
-                Nome=row[1],
-                PrimeiraEntradaPorto=str(row[2]) if row[2] else None,
-                TipoEmbarcacao=row[3]
-            ))
-        
+        embarcacoes = await embarcacao_service.get_all_embarcacoes()
         logger.info(f"Listadas {len(embarcacoes)} embarcações")
         return embarcacoes
         
@@ -110,51 +29,42 @@ async def list_embarcacoes():
             detail="Falha ao listar embarcações"
         )
 
-@router.post("/", response_model=EmbarcacaoResponse, status_code=status.HTTP_201_CREATED)
-async def create_embarcacao(embarcacao_data: EmbarcacaoCreate):
-    """Cria nova embarcação - TODAS AS VALIDAÇÕES DO server.js"""
+@router.get("/{embarcacao_id}", response_model=Embarcacao)
+async def get_embarcacao(embarcacao_id: int):
+    """Busca embarcação por ID - USA SERVICE LAYER"""
     try:
-        from app.config.database import db
-        
-        # REGRA DE NEGÓCIO: Verifica duplicatas por nome
-        if await check_embarcacao_duplicates(embarcacao_data.Nome):
+        embarcacao = await embarcacao_service.get_embarcacao_by_id(embarcacao_id)
+        if not embarcacao:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Embarcação já cadastrada com este nome"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Embarcação não encontrada"
             )
+        logger.info(f"Embarcação encontrada: {embarcacao.Nome}")
+        return embarcacao
         
-        # Insere no banco
-        sql = "INSERT INTO EMBARCACOES (Nome, PrimeiraEntradaPorto, TipoEmbarcacao) VALUES (?,?,?)"
-        params = [
-            embarcacao_data.Nome,
-            embarcacao_data.PrimeiraEntradaPorto,
-            embarcacao_data.TipoEmbarcacao
-        ]
-        
-        affected = await db.execute_query(sql, params)
-        
-        if affected > 0:
-            # Busca a embarcação criada
-            sql_select = "SELECT FIRST 1 EmbarcacaoId, Nome, PrimeiraEntradaPorto, TipoEmbarcacao FROM EMBARCACOES WHERE Nome = ? ORDER BY EmbarcacaoId DESC"
-            rows = await db.execute_query(sql_select, [embarcacao_data.Nome])
-            
-            if rows:
-                row = rows[0]
-                logger.info(f"Embarcação criada: {embarcacao_data.Nome}")
-                return EmbarcacaoResponse(
-                    EmbarcacaoId=row[0],
-                    Nome=row[1],
-                    PrimeiraEntradaPorto=str(row[2]) if row[2] else None,
-                    TipoEmbarcacao=row[3]
-                )
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Falha ao criar embarcação"
-        )
-            
     except HTTPException:
         raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar embarcação {embarcacao_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao buscar embarcação"
+        )
+
+@router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def create_embarcacao(embarcacao_data: EmbarcacaoCreate):
+    """Cria nova embarcação - USA SERVICE LAYER"""
+    try:
+        embarcacao = await embarcacao_service.create_embarcacao(embarcacao_data)
+        logger.info(f"Embarcação criada: {embarcacao.Nome} (ID: {embarcacao.EmbarcacaoId})")
+        return {"ok": True, "EmbarcacaoId": embarcacao.EmbarcacaoId}
+        
+    except ValueError as e:
+        logger.warning(f"Erro de validação ao criar embarcação: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Erro ao criar embarcação: {e}")
         raise HTTPException(
@@ -162,55 +72,25 @@ async def create_embarcacao(embarcacao_data: EmbarcacaoCreate):
             detail="Falha ao criar embarcação"
         )
 
-@router.put("/{embarcacao_id}", response_model=EmbarcacaoResponse)
+@router.put("/{embarcacao_id}", response_model=Embarcacao)
 async def update_embarcacao(embarcacao_id: int, embarcacao_data: EmbarcacaoUpdate):
-    """Atualiza embarcação - TODAS AS VALIDAÇÕES DO server.js"""
+    """Atualiza embarcação - USA SERVICE LAYER"""
     try:
-        from app.config.database import db
-        
-        # REGRA DE NEGÓCIO: Verifica duplicatas (excluindo a própria)
-        if await check_embarcacao_duplicates(embarcacao_data.Nome, embarcacao_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Nome já utilizado por outra embarcação"
-            )
-        
-        # Atualiza no banco
-        sql = "UPDATE EMBARCACOES SET Nome=?, PrimeiraEntradaPorto=?, TipoEmbarcacao=? WHERE EmbarcacaoId=?"
-        params = [
-            embarcacao_data.Nome,
-            embarcacao_data.PrimeiraEntradaPorto,
-            embarcacao_data.TipoEmbarcacao,
-            embarcacao_id
-        ]
-        
-        affected = await db.execute_query(sql, params)
-        
-        if affected == 0:
+        embarcacao = await embarcacao_service.update_embarcacao(embarcacao_id, embarcacao_data)
+        if not embarcacao:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Embarcação não encontrada"
             )
+        logger.info(f"Embarcação atualizada: {embarcacao.Nome} (ID: {embarcacao_id})")
+        return embarcacao
         
-        # Busca embarcação atualizada
-        sql_select = "SELECT FIRST 1 EmbarcacaoId, Nome, PrimeiraEntradaPorto, TipoEmbarcacao FROM EMBARCACOES WHERE EmbarcacaoId=?"
-        rows = await db.execute_query(sql_select, [embarcacao_id])
-        
-        if rows:
-            row = rows[0]
-            logger.info(f"Embarcação {embarcacao_id} atualizada")
-            return EmbarcacaoResponse(
-                EmbarcacaoId=row[0],
-                Nome=row[1],
-                PrimeiraEntradaPorto=str(row[2]) if row[2] else None,
-                TipoEmbarcacao=row[3]
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Embarcação não encontrada"
-            )
-            
+    except ValueError as e:
+        logger.warning(f"Erro de validação ao atualizar embarcação: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -222,30 +102,23 @@ async def update_embarcacao(embarcacao_id: int, embarcacao_data: EmbarcacaoUpdat
 
 @router.delete("/{embarcacao_id}")
 async def delete_embarcacao(embarcacao_id: int):
-    """Exclui embarcação - REGRA DE NEGÓCIO: Bloqueia se há PS vinculadas"""
+    """Exclui embarcação - USA SERVICE LAYER"""
     try:
-        from app.config.database import db
-        
-        # REGRA DE NEGÓCIO: Verifica vínculos com PS
-        if await check_embarcacao_ps_vinculos(embarcacao_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Não é possível excluir: há PS vinculadas a esta embarcação."
-            )
-        
-        # Exclui do banco
-        sql = "DELETE FROM EMBARCACOES WHERE EmbarcacaoId=?"
-        affected = await db.execute_query(sql, [embarcacao_id])
-        
-        if affected == 0:
+        deleted = await embarcacao_service.delete_embarcacao(embarcacao_id)
+        if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Embarcação não encontrada"
             )
-        
         logger.info(f"Embarcação {embarcacao_id} excluída")
         return {"ok": True}
         
+    except ValueError as e:
+        logger.warning(f"Erro de validação ao excluir embarcação: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
     except HTTPException:
         raise
     except Exception as e:

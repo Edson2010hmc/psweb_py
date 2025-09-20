@@ -10,15 +10,17 @@ const api = {
   async loginManual(nome){ const r = await fetch('/api/login-manual',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nome})}); return r.json(); },
   async logout(){ const r = await fetch('/api/logout',{method:'POST'}); return r.json(); },
   
-  // === EMBARCAÇÕES ===
-  async embarcacoes(){ const r = await fetch('/api/embarcacoes'); return r.json(); },
+  // === EMBARCAÇÕES - REFATORADO PARA USAR BACKEND ===
+  async embarcacoes(){ const r = await fetch('/api/embarcacoes/'); return r.json(); },
+  async createEmbarcacao(data){ const r = await fetch('/api/embarcacoes/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
+  async updateEmbarcacao(id, data){ const r = await fetch(`/api/embarcacoes/${id}/`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
+  async deleteEmbarcacao(id){ const r = await fetch(`/api/embarcacoes/${id}/`, {method:'DELETE'}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
   
   // === FISCAIS - REFATORADO PARA USAR BACKEND ===
-  // CORRIGIR estas linhas no objeto api:
   async fiscais(){ const r = await fetch('/api/fiscais/'); return r.json(); },
-  async createFiscal(data){ const r = await fetch('/api/fiscais/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
-  async updateFiscal(id, data){ const r = await fetch(`/api/fiscais/${id}/`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); return r.json(); },
-  async deleteFiscal(id){ const r = await fetch(`/api/fiscais/${id}/`, {method:'DELETE'}); return r.json(); },
+  async createFiscal(data){ const r = await fetch('/api/fiscais/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
+  async updateFiscal(id, data){ const r = await fetch(`/api/fiscais/${id}/`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
+  async deleteFiscal(id){ const r = await fetch(`/api/fiscais/${id}/`, {method:'DELETE'}); if (!r.ok) { const error = await r.json(); throw new Error(error.detail || `Erro ${r.status}`); } return r.json(); },
   
   // === PASSAGENS DE SERVIÇO ===
   async listarPS(inicio, fim){ const p = new URLSearchParams(); if (inicio) p.append('inicio',inicio); if (fim) p.append('fim',fim); const r = await fetch('/api/passagens?'+p.toString()); return r.json(); },
@@ -632,8 +634,7 @@ async function onFiscalConfirma(){
     fiscalResetUI();
     alert('Alterações salvas.');
   } catch(e) {
-    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao salvar');
-    alert('Erro: ' + errorMsg);
+    alert('Erro: ' + e.message);
   }
 }
 
@@ -671,8 +672,7 @@ async function onFiscalExcluir(){
     fiscalResetUI();
     alert('Fiscal excluído.');
   } catch(e) {
-    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao excluir');
-    alert('Erro: ' + errorMsg);
+    alert('Erro: ' + e.message);
     if (bSave) bSave.disabled = false;
     if (bEd)   bEd.disabled   = false;
     updateFiscalButtons();
@@ -698,8 +698,183 @@ async function saveFiscal(){
     renderFiscalList();
     alert('Fiscal salvo.');
   } catch(e) {
-    const errorMsg = e.message || (e.response ? `Erro ${e.response.status}` : 'Falha ao salvar');
-    alert('Erro: ' + errorMsg);
+    alert('Erro: ' + e.message);
+  }
+}
+
+// ===================================================================================================
+// GESTÃO DE EMBARCAÇÕES - REFATORADO (USA BACKEND)
+// ===================================================================================================
+
+// Renderiza lista de embarcações
+function renderEmbList() {
+  const sel = document.getElementById('cad_e_list');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— selecione —</option>';
+  EMB.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = String(e.EmbarcacaoId);
+    opt.textContent = `${(e.TipoEmbarcacao||'').toString().padEnd(5,' ').slice(0,5)} ${e.Nome}`;
+    sel.appendChild(opt);
+  });
+  if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  updateEmbButtons();
+}
+
+// Habilita/desabilita botões de embarcações
+function updateEmbButtons() {
+  const $list       = document.getElementById('cad_e_list');
+  const hasSel      = !!($list && $list.value && $list.value !== '');
+  const $btnEditar  = document.getElementById('btnEmbEditar');
+  const $btnExcluir = document.getElementById('btnEmbExcluir');
+
+  if ($btnEditar)  $btnEditar.disabled  = !hasSel;
+  if ($btnExcluir) $btnExcluir.disabled = !hasSel;
+}
+
+// Reseta interface de embarcações
+function embResetUI(){
+  EMB_EDITING_ID = null;
+  embSetEditing(false);
+  const n = document.getElementById('cad_e_nome');     if (n) n.value = '';
+  const p = document.getElementById('cad_e_primeira'); if (p) p.value = '';
+  const t = document.getElementById('cad_e_tipo');     if (t) t.value = '';
+  const sel = document.getElementById('cad_e_list');
+  if (sel) sel.value = '';
+  updateEmbButtons();
+}
+
+// Controla visibilidade dos botões de edição de embarcação
+function embSetEditing(on){
+  const $ = id => document.getElementById(id);
+
+  const bSave   = $('btnSaveEmb');
+  const bEdit   = $('btnEmbEditar');
+  const bDel    = $('btnEmbExcluir');
+  const bOk     = $('btnEmbConfirma');
+  const bCancel = $('btnEmbCancela');
+  const boxEdit = $('embEditActions');
+
+  // Visibilidade
+  if (bSave)   bSave.style.display   = on ? 'none' : '';
+  if (bDel)    bDel.style.display    = on ? 'none' : '';
+  if (bOk)     bOk.style.display     = on ? '' : 'none';
+  if (bCancel) bCancel.style.display = on ? '' : 'none';
+  if (boxEdit) boxEdit.style.display = on ? 'flex' : 'none';
+
+  // Habilitação
+  if (bSave)   bSave.disabled   = on;
+  if (bDel)    bDel.disabled    = on;
+  if (bEdit)   bEdit.disabled   = on;
+  if (bOk)     bOk.disabled     = !on;
+  if (bCancel) bCancel.disabled = !on;
+}
+
+// Inicia edição de embarcação
+function onEmbEditar(){
+  const sel = document.getElementById('cad_e_list');
+  if (!sel || !sel.value) return;
+  const id = Number(sel.value);
+  const it = (EMB||[]).find(e => e.EmbarcacaoId === id);
+  if (!it) return;
+
+  EMB_EDITING_ID = id;
+  document.getElementById('cad_e_nome').value = it.Nome || '';
+  document.getElementById('cad_e_primeira').value = it.PrimeiraEntradaPorto ? String(it.PrimeiraEntradaPorto).slice(0,10) : '';
+  document.getElementById('cad_e_tipo').value = it.TipoEmbarcacao || '';
+
+  embSetEditing(true);
+}
+
+// Confirma edição de embarcação - REFATORADO: USA BACKEND
+async function onEmbConfirma() {
+  const id = EMB_EDITING_ID;
+  if (!id) return;
+
+  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
+  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
+  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim();
+
+  try {
+    await api.updateEmbarcacao(id, { Nome, PrimeiraEntradaPorto, TipoEmbarcacao });
+    
+    // Limpa campos
+    document.getElementById('cad_e_primeira').value = '';
+    document.getElementById('cad_e_tipo').value = '';
+    document.getElementById('cad_e_nome').value = '';
+    
+    // Recarrega lista
+    EMB = await api.embarcacoes();
+    embResetUI();
+    renderEmbList();
+    alert('Alterações salvas.');
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// Cancela edição de embarcação
+function onEmbCancela() {
+  embResetUI();
+}
+
+// Exclui embarcação - REFATORADO: USA BACKEND
+async function onEmbExcluir() {
+  const sel = document.getElementById('cad_e_list');
+  if (!sel || !sel.value) return;
+  const id = Number(sel.value);
+  const it = EMB.find(e => e.EmbarcacaoId === id);
+  if (!it) return;
+
+  const btnSave = document.getElementById('btnSaveEmb');
+  const btnEd   = document.getElementById('btnEmbEditar');
+  const btnEx   = document.getElementById('btnEmbExcluir');
+  if (btnSave) btnSave.disabled = true;
+  if (btnEd)   btnEd.disabled   = true;
+
+  const ok = window.confirm(`Confirma a exclusão da embarcação "${it.Nome}"?`);
+  if (!ok) {
+    if (btnSave) btnSave.disabled = false;
+    if (btnEd)   btnEd.disabled   = false;
+    updateEmbButtons();
+    return;
+  }
+
+  try {
+    await api.deleteEmbarcacao(id);
+    EMB = await api.embarcacoes();
+    renderEmbList();
+    embResetUI();
+    alert('Embarcação excluída.');
+  } catch(e) {
+    alert('Erro: ' + e.message);
+    if (btnSave) btnSave.disabled = false;
+    if (btnEd)   btnEd.disabled   = false;
+    updateEmbButtons();
+  }
+}
+
+// Salva nova embarcação - REFATORADO: USA BACKEND
+async function saveEmbarcacao() {
+  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
+  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
+  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim() || null;
+
+  try {
+    await api.createEmbarcacao({ Nome, PrimeiraEntradaPorto, TipoEmbarcacao });
+
+    // Limpa campos
+    document.getElementById('cad_e_nome').value = '';
+    document.getElementById('cad_e_primeira').value = '';
+    document.getElementById('cad_e_tipo').value = '';
+
+    // Recarrega lista
+    EMB = await api.embarcacoes();
+    renderEmbList();
+    alert('Embarcação salva.');
+  } catch (e) {
+    alert('Erro: ' + e.message);
   }
 }
 
@@ -903,237 +1078,6 @@ function applyDesembarcanteLock() {
     el.readOnly = false;
     el.removeAttribute('aria-readonly');
     if (!el.value) el.placeholder = 'Digite o nome conforme cadastro';
-  }
-}
-
-// ===================================================================================================
-// GESTÃO DE EMBARCAÇÕES
-// ===================================================================================================
-
-// Renderiza lista de embarcações
-function renderEmbList() {
-  const sel = document.getElementById('cad_e_list');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— selecione —</option>';
-  EMB.forEach(e => {
-    const opt = document.createElement('option');
-    opt.value = String(e.EmbarcacaoId);
-    opt.textContent = `${(e.TipoEmbarcacao||'').toString().padEnd(5,' ').slice(0,5)} ${e.Nome}`;
-    sel.appendChild(opt);
-  });
-  if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
-  updateEmbButtons();
-}
-
-// Habilita/desabilita botões de embarcações
-function updateEmbButtons() {
-  const $list       = document.getElementById('cad_e_list');
-  const hasSel      = !!($list && $list.value && $list.value !== '');
-  const $btnEditar  = document.getElementById('btnEmbEditar');
-  const $btnExcluir = document.getElementById('btnEmbExcluir');
-
-  if ($btnEditar)  $btnEditar.disabled  = !hasSel;
-  if ($btnExcluir) $btnExcluir.disabled = !hasSel;
-}
-
-// Reseta interface de embarcações
-function embResetUI(){
-  EMB_EDITING_ID = null;
-  embSetEditing(false);
-  const n = document.getElementById('cad_e_nome');     if (n) n.value = '';
-  const p = document.getElementById('cad_e_primeira'); if (p) p.value = '';
-  const t = document.getElementById('cad_e_tipo');     if (t) t.value = '';
-  const sel = document.getElementById('cad_e_list');
-  if (sel) sel.value = '';
-  updateEmbButtons();
-}
-
-// Entra em modo de edição de embarcação
-function embEnterEditMode(id, nome, primeiraEntradaPorto, tipoEmbarcacao) {
-  try {
-    const $nome    = document.getElementById('cad_e_nome');
-    const $primeira= document.getElementById('cad_e_primeira');
-    const $tipo    = document.getElementById('cad_e_tipo');
-
-    if ($nome)     $nome.value     = (nome ?? '').toString();
-    if ($primeira) $primeira.value = (primeiraEntradaPorto ?? '').toString();
-    if ($tipo)     $tipo.value     = (tipoEmbarcacao ?? '').toString();
-
-    const $root = document.getElementById('cad_embarcacoes_root') || document.body;
-    $root.dataset.embEditingId = String(id);
-
-    const hide  = el => el && (el.style.display = 'none');
-    const show  = el => el && (el.style.display = '');
-    const dis   = (el, v=true) => el && (el.disabled = v);
-
-    const $btnSalvar   = document.getElementById('btnSaveEmb');
-    const $btnEditar   = document.getElementById('btnEmbEditar');
-    const $btnExcluir  = document.getElementById('btnEmbExcluir');
-    const $btnConfirma = document.getElementById('btnEmbConfirma');
-    const $btnCancela  = document.getElementById('btnEmbCancela');
-
-    hide($btnSalvar);
-    hide($btnExcluir);
-    dis($btnEditar, true);
-    show($btnConfirma);
-    show($btnCancela);
-  } catch (err) {
-    console.error('embEnterEditMode error:', err);
-    alert('Não foi possível entrar no modo de edição da embarcação.');
-  }
-}
-
-// Controla visibilidade dos botões de edição de embarcação
-function embSetEditing(on){
-  const $ = id => document.getElementById(id);
-
-  const bSave   = $('btnSaveEmb');
-  const bEdit   = $('btnEmbEditar');
-  const bDel    = $('btnEmbExcluir');
-  const bOk     = $('btnEmbConfirma');
-  const bCancel = $('btnEmbCancela');
-  const boxEdit = $('embEditActions');
-
-  // Visibilidade
-  if (bSave)   bSave.style.display   = on ? 'none' : '';
-  if (bDel)    bDel.style.display    = on ? 'none' : '';
-  if (bOk)     bOk.style.display     = on ? '' : 'none';
-  if (bCancel) bCancel.style.display = on ? '' : 'none';
-  if (boxEdit) boxEdit.style.display = on ? 'flex' : 'none';
-
-  // Habilitação
-  if (bSave)   bSave.disabled   = on;
-  if (bDel)    bDel.disabled    = on;
-  if (bEdit)   bEdit.disabled   = on;
-  if (bOk)     bOk.disabled     = !on;
-  if (bCancel) bCancel.disabled = !on;
-}
-
-// Inicia edição de embarcação
-function onEmbEditar(){
-  const sel = document.getElementById('cad_e_list');
-  if (!sel || !sel.value) return;
-  const id = Number(sel.value);
-  const it = (EMB||[]).find(e => e.EmbarcacaoId === id);
-  if (!it) return;
-
-  EMB_EDITING_ID = id;
-  document.getElementById('cad_e_nome').value = it.Nome || '';
-  document.getElementById('cad_e_primeira').value = it.PrimeiraEntradaPorto ? String(it.PrimeiraEntradaPorto).slice(0,10) : '';
-  document.getElementById('cad_e_tipo').value = it.TipoEmbarcacao || '';
-
-  embSetEditing(true);
-}
-
-// Confirma edição de embarcação
-async function onEmbConfirma() {
- const id = EMB_EDITING_ID;
-  if (!id) return;
-
-  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
-  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
-  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim();
-
-  if (!Nome) { alert('Informe o Nome da embarcação.'); return; }
-  if (TipoEmbarcacao && TipoEmbarcacao.length > 20) {
-    alert('Tipo da Embarcação deve ter no máximo 20 caracteres.');
-    return;
-  }
-
-  const r = await fetch(`/api/embarcacoes/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ Nome, PrimeiraEntradaPorto, TipoEmbarcacao })
-  });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) { alert(j.error || 'Falha ao salvar alterações'); return; }
-
-  try { EMB = await api.embarcacoes(); } catch(_) {}
-  if (typeof renderEmbList === 'function') renderEmbList();
-
-  document.getElementById('cad_e_primeira').value = '';
-  document.getElementById('cad_e_tipo').value = '';
-  document.getElementById('cad_e_nome').value = '';
-  embResetUI();
-  renderEmbList();
-  alert('Alterações salvas.');
-}
-
-// Cancela edição de embarcação
-function onEmbCancela() {
-  embResetUI();
-}
-
-// Exclui embarcação
-async function onEmbExcluir() {
-  const sel = document.getElementById('cad_e_list');
-  if (!sel || !sel.value) return;
-  const id = Number(sel.value);
-  const it = EMB.find(e => e.EmbarcacaoId === id);
-  if (!it) return;
-
-  const btnSave = document.getElementById('btnSaveEmb');
-  const btnEd   = document.getElementById('btnEmbEditar');
-  const btnEx   = document.getElementById('btnEmbExcluir');
-  if (btnSave) btnSave.disabled = true;
-  if (btnEd)   btnEd.disabled   = true;
-
-  const ok = window.confirm(`Confirma a exclusão da embarcação "${it.Nome}"?`);
-  if (!ok) {
-    if (btnSave) btnSave.disabled = false;
-    if (btnEd)   btnEd.disabled   = false;
-    updateEmbButtons();
-    return;
-  }
-
-  const r = await fetch(`/api/embarcacoes/${id}`, { method: 'DELETE' });
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) {
-    alert(j.error || 'Falha ao excluir. Verifique se não há PS vinculadas.');
-    if (btnSave) btnSave.disabled = false;
-    if (btnEd)   btnEd.disabled   = false;
-    updateEmbButtons();
-    return;
-  }
-
-  try { EMB = await api.embarcacoes(); } catch(_) {}
-  renderEmbList();
-  embResetUI();
-  alert('Embarcação excluída.');
-}
-
-// Salva nova embarcação
-async function saveEmbarcacao() {
-  const Nome = document.getElementById('cad_e_nome')?.value?.trim();
-  const PrimeiraEntradaPorto = document.getElementById('cad_e_primeira')?.value || null;
-  const TipoEmbarcacao = document.getElementById('cad_e_tipo')?.value?.trim() || null;
-
-  if (!Nome) { alert('Informe o tipo,nome e data da primeiro porto da embarcação.'); return; }
-  if (TipoEmbarcacao && TipoEmbarcacao.length > 10) {
-    alert('Tipo da Embarcação deve ter no máximo 10 caracteres.');
-    return;
-  }
-
-  try {
-    const r = await fetch('/api/embarcacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Nome, PrimeiraEntradaPorto, TipoEmbarcacao })
-    });
-    const j = await r.json();
-    if (!r.ok) { alert(j.error || 'Erro ao salvar'); return; }
-
-    document.getElementById('cad_e_nome').value = '';
-    document.getElementById('cad_e_primeira').value = '';
-    document.getElementById('cad_e_tipo').value = '';
-
-    try { EMB = await api.embarcacoes(); } catch(_) {}
-    if (typeof renderEmbList === 'function') renderEmbList();
-
-    alert('Embarcação salva.');
-  } catch (e) {
-    alert('Erro ao salvar: ' + e.message);
   }
 }
 
@@ -1389,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSaveFiscal) btnSaveFiscal.addEventListener('click', saveFiscal);
 });
 
-// Event listeners para embarcações
+// Event listeners para embarcações - REFATORADO
 document.addEventListener('DOMContentLoaded', () => {
   const $list       = document.getElementById('cad_e_list');
   const $btnSalvar  = document.getElementById('btnSaveEmb');

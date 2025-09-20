@@ -16,8 +16,9 @@ from pathlib import Path
 from app.config.settings import settings
 from app.config.database import init_database
 
-# Importar TODAS as APIs com regras de negócio
-from app.api.v1 import fiscais_api, embarcacoes_api, passagens_api
+# Importar TODAS as APIs com regras de negócio REFATORADAS
+from app.api.v1 import fiscais_api, passagens_api
+from app.api.v1.embarcacoes_api import router as embarcacoes_router
 
 # Configurar logging
 logging.basicConfig(
@@ -62,9 +63,9 @@ try:
 except Exception as e:
     logger.error(f"Erro ao montar arquivos estáticos: {e}")
 
-# === INCLUIR TODAS AS APIs COM REGRAS DE NEGÓCIO ===
+# === INCLUIR TODAS AS APIs COM REGRAS DE NEGÓCIO REFATORADAS ===
 app.include_router(fiscais_api.router, tags=["Fiscais"])
-app.include_router(embarcacoes_api.router, tags=["Embarcações"]) 
+app.include_router(embarcacoes_router, tags=["Embarcações"]) 
 app.include_router(passagens_api.router, tags=["Passagens"])
 
 # === FRONTEND - APENAS INTERFACE ===

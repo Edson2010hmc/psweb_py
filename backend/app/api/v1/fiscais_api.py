@@ -147,16 +147,22 @@ async def list_fiscais():
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_fiscal(fiscal_data: FiscalCreate):
     """Cria novo fiscal - TODAS AS VALIDAÇÕES DO server.js"""
+    import traceback
+    
     try:
+        print(f"🔸 INICIO: Criando fiscal {fiscal_data.Nome}")
         from app.config.database import db
         
         # REGRA DE NEGÓCIO: Verifica duplicatas
+        print(f"🔸 VERIFICANDO: Duplicatas para {fiscal_data.Nome}")
         if await check_fiscal_duplicates(fiscal_data.Nome, fiscal_data.Chave):
+            print(f"🔸 ERRO: Fiscal já cadastrado")
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Ja cadastrado"  # Mesma mensagem do server.js
             )
         
+        print(f"🔸 INSERINDO: No banco de dados")
         # Insere no banco
         sql = "INSERT INTO FISCAIS (Nome, Chave, Telefone) VALUES (?,?,?)"
         params = [
@@ -166,21 +172,38 @@ async def create_fiscal(fiscal_data: FiscalCreate):
         ]
         
         affected = await db.execute_query(sql, params)
+        print(f"🔸 RESULTADO: {affected} linhas afetadas")
         
         if affected > 0:
             # Busca o fiscal criado para retornar
+            print(f"🔸 BUSCANDO: Fiscal criado")
             novo_fiscal = await resolve_fiscal_by_name(fiscal_data.Nome)
-            logger.info(f"Fiscal criado: {fiscal_data.Nome}")
-            return {"ok": True, "FiscalId": novo_fiscal["FiscalId"]}
+            print(f"🔸 ENCONTRADO: {novo_fiscal}")
+            
+            if novo_fiscal:
+                logger.info(f"Fiscal criado: {fiscal_data.Nome}")
+                result = {"ok": True, "FiscalId": novo_fiscal["FiscalId"]}
+                print(f"🔸 RETORNANDO: {result}")
+                return result
+            else:
+                print(f"🔸 ERRO: Fiscal não encontrado após criação")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Fiscal criado mas não encontrado"
+                )
         else:
+            print(f"🔸 ERRO: Nenhuma linha afetada")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Erro ao salvar"
             )
             
     except HTTPException:
+        print(f"🔸 HTTP EXCEPTION: Re-raising")
         raise
     except Exception as e:
+        print(f"🔸 ERRO FATAL: {str(e)}")
+        print(f"🔸 TRACEBACK: {traceback.format_exc()}")
         logger.error(f"Erro ao criar fiscal: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

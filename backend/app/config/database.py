@@ -100,6 +100,9 @@ class FirebirdConnection:
                 connection.commit()
                 affected = cursor.rowcount
                 cursor.close()
+                # FIREBIRD: -1 significa "não determinado" mas operação foi bem-sucedida
+                if affected == -1:
+                    return 1  # Assume 1 linha afetada para INSERT/UPDATE/DELETE
                 return affected
                 
         except Exception as e:
