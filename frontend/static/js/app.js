@@ -567,27 +567,51 @@ async function boot() {
     debugLog('Configurando event listeners...');
     bindMainEventListeners();
 
-    // 3. Inicializa todos os módulos
-    debugLog('Inicializando módulos...');
-    await initializeModules();
-
-    // 4. Configura callbacks para autenticação
+    // 3. Configura callbacks para autenticação (antes da inicialização dos módulos)
     debugAuth('Configurando callbacks de autenticação...');
+    let callbacksExecutadosAntecipadamente = false;
     if (window.AuthModule) {
       window.AuthModule.onAuthSuccess(onAuthSuccess);
       window.AuthModule.onPostAuthInit(onPostAuthInit);
       debugAuth('Callbacks configurados com sucesso');
+
+      try {
+        const ctx = typeof window.AuthModule.getCurrentUser === 'function'
+          ? window.AuthModule.getCurrentUser()
+          : null;
+        const hasCtx = ctx && (typeof ctx === 'object' ? Object.keys(ctx).length > 0 : true);
+        const jaAutenticado = hasCtx ||
+          (typeof window.AuthModule.isAuthenticated === 'function' && window.AuthModule.isAuthenticated());
+
+        if (jaAutenticado) {
+          debugAuth('⚡ Autenticação pré-existente detectada; executando atualização imediata de contexto.');
+          updateGlobalContext();
+          await postAuthInit();
+          callbacksExecutadosAntecipadamente = true;
+          debugAuth('⚡ Fluxo pós-autenticação executado antecipadamente.');
+        }
+      } catch (error) {
+        debugAuth('⚠️ Não foi possível executar callbacks antecipados:', error);
+        console.warn('⚠️ Não foi possível executar callbacks antecipados:', error);
+      }
     } else {
       debugAuth('❌ AuthModule não disponível para configurar callbacks');
     }
 
-    // 5. Inicia processo de autenticação
-    debugAuth('Iniciando processo de autenticação...');
+    // 4. Inicializa todos os módulos
+    debugLog('Inicializando módulos...');
+    await initializeModules();
+
+    // 5. Valida autenticação (callbacks podem já ter sido executados)
+    debugAuth('Validando estado de autenticação com AuthModule...');
     if (window.AuthModule) {
       const authenticated = await window.AuthModule.checkAuth();
       if (authenticated) {
-        debugAuth('✅ Sistema autenticado, executando callbacks...');
-        // Os callbacks já foram executados pelo AuthModule
+        if (callbacksExecutadosAntecipadamente) {
+          debugAuth('✅ Token válido. Callbacks já haviam sido executados antecipadamente.');
+        } else {
+          debugAuth('✅ Token válido. Callbacks acionados pelo AuthModule durante a validação.');
+        }
         debugAuth('✅ Sistema completamente inicializado');
         console.log('✅ Sistema autenticado e inicializado');
       } else {
