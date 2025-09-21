@@ -113,7 +113,7 @@ function _disable(el, on) {
 const isWindowsAuth = () => true;
 
 /**
- * Verifica se usuário é administrador
+ * Verifica se usuário é admin
  */
 const isAdmin = () => {
     debugAuth('isAdmin() chamado, USER_PROFILE:', USER_PROFILE);
@@ -121,7 +121,7 @@ const isAdmin = () => {
 };
 
 /**
- * Verifica se usuário é apenas fiscal
+ * Verifica se usuário não é admin
  */
 const isFiscal = () => {
     debugAuth('isFiscal() chamado, USER_PROFILE:', USER_PROFILE);
@@ -225,61 +225,118 @@ function setUser(name) {
 }
 
 /**
- * Aplica controles de perfil na interface principal - COM DEBUG DETALHADO
+ * FUNÇÃO PRINCIPAL: Aplica controles de perfil na interface - COM DEBUG DETALHADO E CORREÇÕES
  */
 function applyProfileControls(profile) {
-  debugAuth('🎯 applyProfileControls() chamado com perfil:', profile);
+  debugAuth('🎯 === INICIANDO applyProfileControls ===');
+  debugAuth('Perfil recebido:', profile);
   debugAuth('USER_PROFILE antes da atualização:', USER_PROFILE);
   
+  // Atualiza variável global
   USER_PROFILE = profile;
   debugAuth('USER_PROFILE após atualização:', USER_PROFILE);
   
-  // Controla visibilidade do botão Cadastros
+  // Localiza o botão de cadastros
   const cadastrosButton = document.querySelector('.tablink[data-tab="cadastros"]');
+  debugAuth('🔍 Procurando botão cadastros...');
   debugAuth('Botão cadastros encontrado:', !!cadastrosButton);
   
-  if (cadastrosButton) {
-    debugAuth('Estado atual do botão cadastros:');
-    debugAuth('  - display:', cadastrosButton.style.display);
-    debugAuth('  - disabled:', cadastrosButton.disabled);
+  if (!cadastrosButton) {
+    debugAuth('❌ CRÍTICO: Botão cadastros não encontrado no DOM!');
+    console.error('❌ CRÍTICO: Botão cadastros não encontrado no DOM!');
     
-    if (profile === 'ADMIN') {
-      // Admin: botão visível
-      cadastrosButton.style.display = '';
-      cadastrosButton.disabled = false;
-      cadastrosButton.title = 'Acesso liberado - Administrador';
-      debugAuth('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
-    } else {
-      // Usuario: botão oculto
-      cadastrosButton.style.display = 'none';
-      cadastrosButton.disabled = true;
-      debugAuth('❌ Botão Cadastros OCULTO (perfil USUARIO)');
-      
-      // Se está na aba cadastros, volta para início
-      const cadastrosTab = document.getElementById('tab-cadastros');
-      if (cadastrosTab && cadastrosTab.classList.contains('active')) {
-        debugAuth('📍 Estava na aba cadastros, redirecionando para consultas...');
-        setTab('consultas');
-      }
-    }
+    // Tenta localizar todos os botões tablink para debug
+    const allTablinks = document.querySelectorAll('.tablink');
+    debugAuth('Todos os botões tablink encontrados:', allTablinks.length);
+    allTablinks.forEach((btn, idx) => {
+      debugAuth(`  ${idx}: data-tab="${btn.dataset.tab}", texto="${btn.textContent}"`);
+    });
     
-    debugAuth('Estado final do botão cadastros:');
-    debugAuth('  - display:', cadastrosButton.style.display);
-    debugAuth('  - disabled:', cadastrosButton.disabled);
+    return;
   }
+  
+  debugAuth('📊 Estado ANTES das alterações:');
+  debugAuth('  - display:', window.getComputedStyle(cadastrosButton).display);
+  debugAuth('  - disabled:', cadastrosButton.disabled);
+  debugAuth('  - style.display:', cadastrosButton.style.display);
+  debugAuth('  - classList:', Array.from(cadastrosButton.classList));
+  
+  // Aplica controles baseados no perfil
+  if (profile === 'ADMIN') {
+    debugAuth('🔧 Aplicando controles para ADMIN...');
+    
+    // Remove qualquer ocultação anterior
+    cadastrosButton.style.display = '';
+    cadastrosButton.style.visibility = '';
+    cadastrosButton.disabled = false;
+    cadastrosButton.title = 'Acesso liberado - Administrador';
+    
+    // Remove classes que possam ocultar o botão
+    cadastrosButton.classList.remove('hidden', 'disabled');
+    
+    debugAuth('✅ Botão Cadastros VISÍVEL E HABILITADO (perfil ADMIN)');
+    console.log('✅ Botão Cadastros VISÍVEL E HABILITADO (perfil ADMIN)');
+    
+  } else {
+    debugAuth('🔧 Aplicando controles para USUARIO...');
+    
+    // Oculta o botão para usuários comuns
+    cadastrosButton.style.display = 'none';
+    cadastrosButton.disabled = true;
+    cadastrosButton.title = 'Acesso restrito - Somente administradores';
+    
+    debugAuth('❌ Botão Cadastros OCULTO (perfil USUARIO)');
+    console.log('❌ Botão Cadastros OCULTO (perfil USUARIO)');
+    
+    // Se está na aba cadastros, volta para início
+    const cadastrosTab = document.getElementById('tab-cadastros');
+    if (cadastrosTab && cadastrosTab.classList.contains('active')) {
+      debugAuth('📍 Estava na aba cadastros, redirecionando para consultas...');
+      console.log('📍 Estava na aba cadastros, redirecionando para consultas...');
+      setTab('consultas');
+    }
+  }
+  
+  debugAuth('📊 Estado APÓS as alterações:');
+  debugAuth('  - display:', window.getComputedStyle(cadastrosButton).display);
+  debugAuth('  - disabled:', cadastrosButton.disabled);
+  debugAuth('  - style.display:', cadastrosButton.style.display);
+  debugAuth('  - classList:', Array.from(cadastrosButton.classList));
   
   // Atualiza título com perfil
   const subTitle = document.getElementById('subTitle');
   if (subTitle) {
-    const profileText = profile === 'ADMIN' ? 'Administrador' : 'Usuário';
+    const profileText = profile === 'ADMIN' ? 'Perfil ADMIN' : 'Perfil FISCAL';
     const newTitle = `Fiscalização SUB/SSUB/MIS - ${profileText}`;
     subTitle.textContent = newTitle;
     debugAuth('Título atualizado:', newTitle);
   }
   
-  debugAuth(`🎯 Perfil ${profile} aplicado na interface principal`);
+  // Força uma verificação adicional após 100ms (para garantir que mudanças persistam)
+  setTimeout(() => {
+    const currentDisplay = window.getComputedStyle(cadastrosButton).display;
+    const currentDisabled = cadastrosButton.disabled;
+    
+    debugAuth('🔍 Verificação pós-aplicação (100ms depois):');
+    debugAuth(`  - display: ${currentDisplay}`);
+    debugAuth(`  - disabled: ${currentDisabled}`);
+    debugAuth(`  - perfil esperado: ${profile}`);
+    
+    if (profile === 'ADMIN' && (currentDisplay === 'none' || currentDisabled)) {
+      debugAuth('⚠️ INCONSISTÊNCIA DETECTADA! Botão deveria estar visível para ADMIN');
+      console.warn('⚠️ INCONSISTÊNCIA DETECTADA! Botão deveria estar visível para ADMIN');
+      
+      // Força novamente
+      cadastrosButton.style.display = '';
+      cadastrosButton.disabled = false;
+      debugAuth('🔧 Forçando visibilidade novamente...');
+    }
+  }, 100);
+  
+  debugAuth(`🎯 === FIM applyProfileControls - Perfil ${profile} aplicado ===`);
   debugAuth('isAdmin() após aplicação:', isAdmin());
   debugAuth('isFiscal() após aplicação:', isFiscal());
+  console.log(`🎯 Perfil ${profile} aplicado na interface principal`);
 }
 
 // ===================================================================================================
@@ -354,50 +411,79 @@ async function postAuthInit() {
 }
 
 /**
- * Atualiza contexto global após autenticação - COM DEBUG DETALHADO
+ * Atualiza contexto global após autenticação - COM DEBUG 
  */
 function updateGlobalContext() {
-  debugAuth('🔄 updateGlobalContext() iniciado');
+  debugAuth('🔄 === INICIANDO updateGlobalContext ===');
   
-  if (window.AuthModule) {
-    CTX = window.AuthModule.getCurrentUser();
-    AUTH_MODE = window.AuthModule.getAuthMode();
-    USER_PROFILE = window.AuthModule.getProfile();
-    
-    debugAuth('Contexto capturado do AuthModule:');
-    debugAuth('  - CTX:', CTX);
-    debugAuth('  - AUTH_MODE:', AUTH_MODE);
-    debugAuth('  - USER_PROFILE:', USER_PROFILE);
-    
-    setUser(CTX?.nome || '');
-    
-    // Aplica controles de perfil
-    if (USER_PROFILE) {
-      debugAuth('Aplicando controles de perfil...');
-      applyProfileControls(USER_PROFILE);
-    } else {
-      debugAuth('⚠️ USER_PROFILE não definido!');
-    }
-    
-    debugAuth('🔄 Contexto global atualizado:', {
-      nome: CTX?.nome,
-      profile: USER_PROFILE,
-      auth_mode: AUTH_MODE,
-      isFiscal: CTX?.isFiscal,
-      isAdmin: CTX?.isAdmin
-    });
-  } else {
+  if (!window.AuthModule) {
     debugAuth('❌ AuthModule não disponível!');
+    return;
   }
+  
+  // Captura dados do AuthModule
+  CTX = window.AuthModule.getCurrentUser();
+  AUTH_MODE = window.AuthModule.getAuthMode();
+  USER_PROFILE = window.AuthModule.getProfile();
+  
+  debugAuth('📋 Dados capturados do AuthModule:');
+  debugAuth('  - CTX:', CTX);
+  debugAuth('  - AUTH_MODE:', AUTH_MODE);
+  debugAuth('  - USER_PROFILE:', USER_PROFILE);
+  
+  // Valida se dados foram capturados corretamente
+  if (!CTX) {
+    debugAuth('❌ CTX não foi capturado!');
+    console.error('❌ CTX não foi capturado do AuthModule!');
+    return;
+  }
+  
+  if (!USER_PROFILE) {
+    debugAuth('❌ USER_PROFILE não foi capturado!');
+    console.error('❌ USER_PROFILE não foi capturado do AuthModule!');
+    return;
+  }
+  
+  // Atualiza nome do usuário
+  debugAuth('Atualizando nome do usuário na interface...');
+  setUser(CTX?.nome || '');
+  
+  // CHAMA A FUNÇÃO PRINCIPAL de controle de perfil
+  debugAuth('🎯 Chamando applyProfileControls...');
+  applyProfileControls(USER_PROFILE);
+  
+  // Log final de verificação
+  debugAuth('🔄 === FIM updateGlobalContext ===');
+  debugAuth('Estado final:', {
+    nome: CTX?.nome,
+    profile: USER_PROFILE,
+    auth_mode: AUTH_MODE,
+    isFiscal: CTX?.isFiscal,
+    isAdmin: CTX?.isAdmin,
+    isAdminFunction: isAdmin(),
+    isFiscalFunction: isFiscal()
+  });
+  
+  console.log('🔄 Contexto global atualizado:', {
+    nome: CTX?.nome,
+    profile: USER_PROFILE,
+    auth_mode: AUTH_MODE
+  });
 }
 
 /**
- * Callback para sucesso de autenticação
+ * Callback para sucesso de autenticação - CORRIGIDO
  */
 async function onAuthSuccess() {
-  debugAuth('✅ onAuthSuccess() chamado');
+  debugAuth('✅ === onAuthSuccess CHAMADO ===');
+  
+  // Aguarda um frame para garantir que AuthModule finalizou
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  
+  debugAuth('Atualizando contexto global...');
   updateGlobalContext();
-  debugAuth('✅ Autenticação bem-sucedida, contexto atualizado');
+  
+  debugAuth('✅ onAuthSuccess concluído');
 }
 
 /**
@@ -490,7 +576,7 @@ async function boot() {
     if (window.AuthModule) {
       window.AuthModule.onAuthSuccess(onAuthSuccess);
       window.AuthModule.onPostAuthInit(onPostAuthInit);
-      debugAuth('Callbacks configurados');
+      debugAuth('Callbacks configurados com sucesso');
     } else {
       debugAuth('❌ AuthModule não disponível para configurar callbacks');
     }
@@ -500,10 +586,8 @@ async function boot() {
     if (window.AuthModule) {
       const authenticated = await window.AuthModule.checkAuth();
       if (authenticated) {
-        debugAuth('✅ Sistema autenticado, atualizando contexto...');
-        updateGlobalContext();
-        debugAuth('Iniciando pós-autenticação...');
-        await postAuthInit();
+        debugAuth('✅ Sistema autenticado, executando callbacks...');
+        // Os callbacks já foram executados pelo AuthModule
         debugAuth('✅ Sistema completamente inicializado');
         console.log('✅ Sistema autenticado e inicializado');
       } else {
@@ -561,13 +645,31 @@ window.debugApp = {
     console.log('DEBUG_CONFIG:', DEBUG_CONFIG);
   },
   testProfileControls: (profile) => {
-    console.log(`Testando perfil: ${profile}`);
+    console.log(`🧪 Testando perfil: ${profile}`);
     applyProfileControls(profile);
   },
   enableDebug: () => {
     DEBUG_CONFIG.DEBUG = true;
     DEBUG_CONFIG.DEBUG_AUTH = true;
-    console.log('Debug habilitado manualmente');
+    console.log('🔧 Debug habilitado manualmente');
+  },
+  forceUpdateProfile: () => {
+    console.log('🔧 Forçando atualização de perfil...');
+    updateGlobalContext();
+  },
+  checkCadastrosButton: () => {
+    const btn = document.querySelector('.tablink[data-tab="cadastros"]');
+    console.log('=== ESTADO DO BOTÃO CADASTROS ===');
+    console.log('Encontrado:', !!btn);
+    if (btn) {
+      console.log('Display computed:', window.getComputedStyle(btn).display);
+      console.log('Display style:', btn.style.display);
+      console.log('Disabled:', btn.disabled);
+      console.log('Classes:', Array.from(btn.classList));
+      console.log('Title:', btn.title);
+    }
+    console.log('USER_PROFILE:', USER_PROFILE);
+    console.log('isAdmin():', isAdmin());
   }
 };
 

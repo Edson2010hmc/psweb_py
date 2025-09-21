@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script para executar o servidor PSWEB Python - CORRIGIDO PARA FDB
+Script para executar o servidor PSWEB Python 
 """
 
 import sys
@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 def setup_python_path():
-    """Configura o PYTHONPATH para a estrutura correta"""
+    """Configura o PYTHONPATH """
     base_dir = Path(__file__).parent
     backend_dir = base_dir / "backend"
     
@@ -23,7 +23,7 @@ def setup_python_path():
     return backend_dir
 
 def setup_firebird_environment():
-    """Configura ambiente Firebird - BASEADO NA APLICAÇÃO FUNCIONAL"""
+    """Configura ambiente Firebird """
     firebird_dir = r"C:\Users\Public\Firebird-4.0.5.3140-0-x64"
     
     # Adiciona ao PATH
@@ -45,7 +45,7 @@ def setup_firebird_environment():
         print(f"  ⚠️  Erro ao carregar DLL: {e}")
 
 def test_imports():
-    """Testa se os imports principais funcionam - CORRIGIDO PARA FDB"""
+    """Testa se os imports principais funcionam """
     print("\nTestando imports...")
     
     try:
@@ -66,7 +66,7 @@ def test_imports():
         print("  ✓ App principal importado")
         
         return True
-        
+                
     except ImportError as e:
         print(f"  ✗ Erro de import: {e}")
         return False

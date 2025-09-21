@@ -30,6 +30,10 @@ const AuthModule = (function() {
     let authToken = null;
     let authConfig = null;
 
+    // Callbacks externos para coordenação
+    let onAuthSuccessCallback = null;
+    let onPostAuthInitCallback = null;
+
     // ===================================================================================================
     // APIs ESPECÍFICAS DO MÓDULO
     // ===================================================================================================
@@ -103,7 +107,7 @@ const AuthModule = (function() {
     }
 
     // ===================================================================================================
-    // CONTROLE DE INTERFACE E PERFIS
+    // CONTROLE DE INTERFACE SIMPLIFICADO
     // ===================================================================================================
     function setUserDisplay(name) {
         debugLog('setUserDisplay chamado', { name });
@@ -116,73 +120,18 @@ const AuthModule = (function() {
         }
     }
 
-    function applyProfileBasedUI(profile) {
-        debugLog('applyProfileBasedUI chamado', { profile });
-        
-        /**
-         * Controla visibilidade baseada no perfil:
-         * - USUARIO (só fiscal): Botão "Cadastros" oculto
-         * - ADMIN (administrador ou ambos): Botão "Cadastros" visível
-         */
-        
-        // Controla botão "Cadastros" na navegação principal
-        const cadastrosButton = document.querySelector('.tablink[data-tab="cadastros"]');
-        debugLog('Botão cadastros encontrado?', !!cadastrosButton);
-        
-        if (cadastrosButton) {
-            if (profile === 'ADMIN') {
-                cadastrosButton.style.display = ''; // Visível para admins
-                cadastrosButton.disabled = false;
-                debugLog('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
-                console.log('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
-            } else {
-                cadastrosButton.style.display = 'none'; // Oculto para usuários
-                cadastrosButton.disabled = true;
-                debugLog('❌ Botão Cadastros OCULTO (perfil USUARIO)');
-                console.log('❌ Botão Cadastros OCULTO (perfil USUARIO)');
-                
-                // Se está na aba cadastros, volta para início
-                const cadastrosTab = getElement('tab-cadastros');
-                if (cadastrosTab && cadastrosTab.classList.contains('active')) {
-                    if (typeof window.setTab === 'function') {
-                        window.setTab('consultas');
-                        debugLog('Redirecionado da aba cadastros para consultas');
-                    }
-                }
-            }
-        } else {
-            debugError('Botão cadastros não encontrado no DOM!');
-        }
-        
-        debugLog(`🎯 Perfil ${profile} aplicado na interface`);
-        console.log(`🎯 Perfil ${profile} aplicado na interface`);
-    }
-
     function updateContextualInfo(userContext) {
         debugLog('updateContextualInfo chamado', userContext);
         
-        /**
-         * Atualiza informações contextuais na interface
-         */
-        
-        // Atualiza nome do usuário
+        // Atualiza APENAS o nome do usuário (controle de perfil delegado)
         debugLog('Atualizando nome do usuário', userContext?.nome);
         setUserDisplay(userContext?.nome || '');
         
-        // Aplica perfil na UI
-        if (userContext?.profile) {
-            debugLog('Aplicando perfil na UI', userContext.profile);
-            applyProfileBasedUI(userContext.profile);
-        } else {
-            debugError('userContext.profile não encontrado!', userContext);
-        }
-        
-        // Atualiza título se necessário
-        const subTitle = getElement('subTitle');
-        if (subTitle && userContext?.profile) {
-            const profileText = userContext.profile === 'ADMIN' ? 'Administrador' : 'Usuário';
-            subTitle.textContent = `Fiscalização SUB/SSUB/MIS - ${profileText}`;
-            debugLog('Título atualizado', profileText);
+        // DELEGA controle de perfil para callbacks externos (app.js)
+        debugLog('Delegando controle de perfil para módulo principal...');
+        if (onAuthSuccessCallback && typeof onAuthSuccessCallback === 'function') {
+            debugLog('Executando callback onAuthSuccess...');
+            onAuthSuccessCallback();
         }
         
         // Log para debug
@@ -192,8 +141,8 @@ const AuthModule = (function() {
             isFiscal: userContext?.isFiscal,
             isAdmin: userContext?.isAdmin
         };
-        debugLog('🔄 Interface atualizada', contextInfo);
-        console.log('🔄 Interface atualizada:', contextInfo);
+        debugLog('🔄 AuthModule: Contexto processado (controle delegado)', contextInfo);
+        console.log('🔄 AuthModule: Contexto processado (controle delegado):', contextInfo);
     }
 
     // ===================================================================================================
@@ -220,8 +169,7 @@ const AuthModule = (function() {
             debugLog('✅ Autenticação bem-sucedida', {
                 profile: authResult.profile,
                 nome: authResult.user?.nome,
-                message: authResult.message,
-                full_result: authResult
+                message: authResult.message
             });
             
             // 3. Armazena token e contexto
@@ -230,12 +178,19 @@ const AuthModule = (function() {
             
             debugLog('📝 Token e contexto armazenados', {
                 token_length: authToken?.length,
-                context: context
+                context_profile: context?.profile,
+                context_nome: context?.nome
             });
             
-            // 4. Atualiza interface
+            // 4. Atualiza interface (delegará controle de perfil)
             debugLog('🖥️ Atualizando interface...');
             updateContextualInfo(context);
+            
+            // 5. Executa callback pós-autenticação se disponível
+            if (onPostAuthInitCallback && typeof onPostAuthInitCallback === 'function') {
+                debugLog('Executando callback onPostAuthInit...');
+                await onPostAuthInitCallback();
+            }
             
             debugLog('✅ Processo de autenticação concluído com sucesso');
             console.log('✅ Processo de autenticação concluído com sucesso');
@@ -293,7 +248,10 @@ const AuthModule = (function() {
             
             if (userInfo && userInfo.user) {
                 context = userInfo.user;
-                debugLog('Token válido, atualizando contexto', context);
+                debugLog('Token válido, atualizando contexto', {
+                    profile: context?.profile,
+                    nome: context?.nome
+                });
                 updateContextualInfo(context);
                 return context;
             }
@@ -421,23 +379,20 @@ const AuthModule = (function() {
             return result;
         },
 
-        // Controle de interface
+        // Controle de interface (SIMPLIFICADO - sem controle de perfil)
         setUserDisplay(name) {
             setUserDisplay(name);
         },
 
-        applyProfileUI(profile) {
-            debugLog('applyProfileUI chamado externamente', profile);
-            applyProfileBasedUI(profile);
-        },
-
-        // Callbacks para outros módulos
+        // Callbacks para coordenação com outros módulos
         onAuthSuccess(callback) {
-            window.onAuthSuccess = callback;
+            debugLog('Registrando callback onAuthSuccess');
+            onAuthSuccessCallback = callback;
         },
 
         onPostAuthInit(callback) {
-            window.onPostAuthInit = callback;
+            debugLog('Registrando callback onPostAuthInit');
+            onPostAuthInitCallback = callback;
         },
 
         // Funções de teste
@@ -465,14 +420,7 @@ const AuthModule = (function() {
             };
         },
 
-        forceUpdateUI() {
-            debugLog('forceUpdateUI chamado manualmente');
-            if (context) {
-                updateContextualInfo(context);
-            }
-        },
-
-        // Funções de compatibilidade
+        // Funções de compatibilidade (mantidas para não quebrar código existente)
         applyDesembarcanteLock() {
             // Mantido para compatibilidade
             const el = getElement('fDesCNome');
@@ -482,7 +430,10 @@ const AuthModule = (function() {
                 el.setAttribute('aria-readonly', 'true');
                 debugLog('applyDesembarcanteLock aplicado', context.nome);
             }
-        }
+        },
+
+        // API pública para outras partes do sistema
+        api
     };
 })();
 
