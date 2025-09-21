@@ -1,15 +1,42 @@
 /**
- * PSWEB - Coordenador Principal da Aplicação - ATUALIZADO
- * Localização: frontend/static/js/app.js
- * 
- * Responsabilidades:
- * - Coordenação geral da aplicação
- * - Navegação entre abas principais com controle de perfil
- * - Agregação de APIs de todos os módulos
- * - Utilitários genéricos compartilhados
- * - Inicialização e orquestração dos módulos
- * - Gerenciamento de estado global com perfis de usuário
+ * ARQUIVO: frontend/static/js/app.js
+ * PSWEB - Coordenador Principal da Aplicação - DEBUG INTEGRADO COM BACKEND
  */
+
+// ===================================================================================================
+// CONFIGURAÇÃO DE DEBUG - SINCRONIZADA COM BACKEND
+// ===================================================================================================
+let DEBUG_CONFIG = {
+    DEBUG: false,
+    DEBUG_AUTH: false,
+    DEBUG_ROUTES: false
+};
+
+async function loadDebugConfig() {
+    try {
+        const response = await fetch('/api/auth/debug-config');
+        if (response.ok) {
+            const result = await response.json();
+            DEBUG_CONFIG = result.config;
+            console.log('🔧 Debug config carregada do backend:', DEBUG_CONFIG);
+        }
+    } catch (error) {
+        // Se não conseguir carregar, mantém defaults (production mode)
+        console.log('🔒 Debug config não disponível (production mode)');
+    }
+}
+
+function debugLog(message, data = null) {
+    if (DEBUG_CONFIG.DEBUG) {
+        console.log(`🚀 [APP DEBUG] ${message}`, data || '');
+    }
+}
+
+function debugAuth(message, data = null) {
+    if (DEBUG_CONFIG.DEBUG_AUTH) {
+        console.log(`🔐 [AUTH DEBUG] ${message}`, data || '');
+    }
+}
 
 // ===================================================================================================
 // SELETORES E UTILITÁRIOS GENÉRICOS
@@ -59,7 +86,7 @@ let CTX = null;           // Contexto do usuário atual
 let FISCAIS = [];         // Lista de fiscais (para compatibilidade)
 let EMB = [];             // Lista de embarcações (para compatibilidade)
 let CUR_PS = null;        // PS atual selecionada (para compatibilidade)
-let AUTH_MODE = 'client_javascript'; // Modo de autenticação
+let AUTH_MODE = 'windows_server'; // Modo de autenticação
 let USER_PROFILE = null;  // Perfil do usuário atual ('USUARIO' ou 'ADMIN')
 
 // ===================================================================================================
@@ -81,48 +108,25 @@ function _disable(el, on) {
 }
 
 /**
- * Verifica se está usando autenticação Windows (sempre false agora)
+ * Verifica se está usando autenticação Windows (sempre true agora)
  */
-const isWindowsAuth = () => false;
+const isWindowsAuth = () => true;
 
 /**
  * Verifica se usuário é administrador
  */
-const isAdmin = () => USER_PROFILE === 'ADMIN';
+const isAdmin = () => {
+    debugAuth('isAdmin() chamado, USER_PROFILE:', USER_PROFILE);
+    return USER_PROFILE === 'ADMIN';
+};
 
 /**
  * Verifica se usuário é apenas fiscal
  */
-const isFiscal = () => USER_PROFILE === 'USUARIO';
-
-/**
- * Normalização de chaves de objetos (compatibilidade)
- */
-function _normalizeKeyToCamelPascal(k) {
-  if (typeof k !== 'string' || !k) return k;
-  const up = k.replace(/[_\s]+/g, '').toUpperCase();
-  
-  return up
-    .replace(/([A-Z]+)(ID|CPF|CNPJ|OS|PS)$/g, (_, base, suf) =>
-      base.charAt(0) + base.slice(1).toLowerCase() + suf.charAt(0) + suf.slice(1).toLowerCase()
-    )
-    .replace(/^([A-Z])/, (m) => m.toUpperCase())
-    .replace(/([A-Z])([A-Z]+)/g, (m, a, b) => a + b.toLowerCase());
-}
-
-function normalizeDeep(value) {
-  if (Array.isArray(value)) {
-    return value.map(normalizeDeep);
-  } else if (value && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]') {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      const nk = _normalizeKeyToCamelPascal(k);
-      out[nk] = normalizeDeep(v);
-    }
-    return out;
-  }
-  return value;
-}
+const isFiscal = () => {
+    debugAuth('isFiscal() chamado, USER_PROFILE:', USER_PROFILE);
+    return USER_PROFILE === 'USUARIO';
+};
 
 // ===================================================================================================
 // NAVEGAÇÃO PRINCIPAL ENTRE ABAS COM CONTROLE DE PERFIL
@@ -132,8 +136,14 @@ function normalizeDeep(value) {
  * Controla navegação entre abas principais com verificação de perfil
  */
 function setTab(id) {
+  debugLog(`setTab('${id}') chamado`);
+  debugLog('USER_PROFILE atual:', USER_PROFILE);
+  debugLog('isAdmin():', isAdmin());
+  
   // Verifica permissão para aba de cadastros
   if (id === 'cadastros' && !isAdmin()) {
+    debugLog('🚫 Acesso negado à aba Cadastros - perfil não é ADMIN');
+    debugLog('USER_PROFILE:', USER_PROFILE);
     console.warn('🚫 Acesso negado à aba Cadastros - perfil USUARIO');
     alert('Acesso restrito a administradores');
     return;
@@ -144,11 +154,23 @@ function setTab(id) {
   if (msgNovaPS) msgNovaPS.innerText = "";
 
   // Atualiza UI das abas
-  $$('.tablink').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
-  $$('.tab').forEach(t => t.classList.toggle('active', t.id === `tab-${id}`));
+  $$('.tablink').forEach(b => {
+    const isActive = b.dataset.tab === id;
+    b.classList.toggle('active', isActive);
+    debugLog(`Tab button ${b.dataset.tab}:`, isActive ? 'ATIVA' : 'inativa');
+  });
+  
+  $$('.tab').forEach(t => {
+    const isActive = t.id === `tab-${id}`;
+    t.classList.toggle('active', isActive);
+    debugLog(`Tab content ${t.id}:`, isActive ? 'ATIVA' : 'inativa');
+  });
+  
+  debugLog(`✅ Navegação para aba '${id}' concluída`);
   
   // Delega ativação/desativação para módulos específicos
   if (id === 'cadastros') {
+    debugLog('Ativando módulos de cadastro...');
     // Ativa módulos de cadastro (só para ADMIN)
     if (window.FiscaisModule && typeof window.FiscaisModule.onActivate === 'function') {
       window.FiscaisModule.onActivate();
@@ -163,6 +185,7 @@ function setTab(id) {
       window.AdmPassagensModule.onActivate();
     }
   } else {
+    debugLog('Desativando módulos de cadastro...');
     // Desativa módulos de cadastro
     if (window.FiscaisModule && typeof window.FiscaisModule.onDeactivate === 'function') {
       window.FiscaisModule.onDeactivate();
@@ -180,6 +203,7 @@ function setTab(id) {
 
   // Ativa módulo de passagens se necessário
   if (id === 'consultas' || id === 'passagem') {
+    debugLog('Ativando módulo de passagens...');
     if (window.PassagensModule && typeof window.PassagensModule.onActivate === 'function') {
       window.PassagensModule.onActivate();
     }
@@ -187,62 +211,75 @@ function setTab(id) {
 }
 
 /**
- * Controla navegação entre sub-abas (delegada para PassagensModule)
+ * Define display do usuário logado
  */
-function setSub(id) {
-  if (window.PassagensModule && typeof window.PassagensModule.setActiveSubModule === 'function') {
-    window.PassagensModule.setActiveSubModule(id);
+function setUser(name) { 
+  debugAuth('setUser() chamado com nome:', name);
+  const userEl = $('#userName');
+  if (userEl) {
+    userEl.textContent = name || '';
+    debugAuth('Nome do usuário atualizado na interface:', name);
   } else {
-    // Fallback básico se módulo não disponível
-    $$('.sublink').forEach(b => b.classList.toggle('active', b.dataset.sub === id));
-    $$('.subtab').forEach(t => t.classList.toggle('active', t.id === `sub-${id}`));
+    debugAuth('ERRO: Elemento userName não encontrado!');
   }
 }
 
 /**
- * Define display do usuário logado
- */
-function setUser(name) { 
-  const userEl = $('#userName');
-  if (userEl) userEl.textContent = name || ''; 
-}
-
-/**
- * Aplica controles de perfil na interface principal
+ * Aplica controles de perfil na interface principal - COM DEBUG DETALHADO
  */
 function applyProfileControls(profile) {
+  debugAuth('🎯 applyProfileControls() chamado com perfil:', profile);
+  debugAuth('USER_PROFILE antes da atualização:', USER_PROFILE);
+  
   USER_PROFILE = profile;
+  debugAuth('USER_PROFILE após atualização:', USER_PROFILE);
   
   // Controla visibilidade do botão Cadastros
   const cadastrosButton = document.querySelector('.tablink[data-tab="cadastros"]');
+  debugAuth('Botão cadastros encontrado:', !!cadastrosButton);
   
   if (cadastrosButton) {
+    debugAuth('Estado atual do botão cadastros:');
+    debugAuth('  - display:', cadastrosButton.style.display);
+    debugAuth('  - disabled:', cadastrosButton.disabled);
+    
     if (profile === 'ADMIN') {
       // Admin: botão visível
       cadastrosButton.style.display = '';
       cadastrosButton.disabled = false;
       cadastrosButton.title = 'Acesso liberado - Administrador';
+      debugAuth('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
     } else {
       // Usuario: botão oculto
       cadastrosButton.style.display = 'none';
       cadastrosButton.disabled = true;
+      debugAuth('❌ Botão Cadastros OCULTO (perfil USUARIO)');
       
       // Se está na aba cadastros, volta para início
       const cadastrosTab = document.getElementById('tab-cadastros');
       if (cadastrosTab && cadastrosTab.classList.contains('active')) {
+        debugAuth('📍 Estava na aba cadastros, redirecionando para consultas...');
         setTab('consultas');
       }
     }
+    
+    debugAuth('Estado final do botão cadastros:');
+    debugAuth('  - display:', cadastrosButton.style.display);
+    debugAuth('  - disabled:', cadastrosButton.disabled);
   }
   
   // Atualiza título com perfil
   const subTitle = document.getElementById('subTitle');
   if (subTitle) {
     const profileText = profile === 'ADMIN' ? 'Administrador' : 'Usuário';
-    subTitle.textContent = `Fiscalização SUB/SSUB/MIS - ${profileText}`;
+    const newTitle = `Fiscalização SUB/SSUB/MIS - ${profileText}`;
+    subTitle.textContent = newTitle;
+    debugAuth('Título atualizado:', newTitle);
   }
   
-  console.log(`🎯 Perfil ${profile} aplicado na interface principal`);
+  debugAuth(`🎯 Perfil ${profile} aplicado na interface principal`);
+  debugAuth('isAdmin() após aplicação:', isAdmin());
+  debugAuth('isFiscal() após aplicação:', isFiscal());
 }
 
 // ===================================================================================================
@@ -253,6 +290,8 @@ function applyProfileControls(profile) {
  * Inicializa todos os módulos da aplicação
  */
 async function initializeModules() {
+  debugLog('🔧 Iniciando inicialização dos módulos...');
+  
   const modules = [
     'AuthModule',
     'FiscaisModule', 
@@ -263,64 +302,92 @@ async function initializeModules() {
   ];
 
   for (const moduleName of modules) {
+    debugLog(`Inicializando módulo: ${moduleName}`);
     const module = window[moduleName];
     if (module && typeof module.init === 'function') {
       try {
         await module.init();
-        console.log(`✅ ${moduleName} inicializado`);
+        debugLog(`✅ ${moduleName} inicializado com sucesso`);
       } catch (error) {
+        debugLog(`❌ Erro ao inicializar ${moduleName}:`, error);
         console.error(`❌ Erro ao inicializar ${moduleName}:`, error);
       }
+    } else {
+      debugLog(`⚠️ ${moduleName} não encontrado ou sem método init()`);
     }
   }
+  
+  debugLog('🔧 Inicialização dos módulos concluída');
 }
 
 /**
  * Inicialização pós-autenticação
  */
 async function postAuthInit() {
+  debugLog('🔄 Iniciando pós-autenticação...');
+  
   // Carrega dados essenciais para compatibilidade
   try {
+    debugLog('Carregando embarcações...');
     EMB = await api.embarcacoes();
+    debugLog('Carregando fiscais...');
     FISCAIS = await api.fiscais();
-    console.log(`📊 Dados carregados: ${EMB.length} embarcações, ${FISCAIS.length} fiscais`);
+    debugLog(`📊 Dados carregados: ${EMB.length} embarcações, ${FISCAIS.length} fiscais`);
   } catch (error) {
+    debugLog('❌ Erro ao carregar dados:', error);
     console.error('❌ Erro ao carregar dados:', error);
   }
 
   // Inicia busca inicial de passagens
   if (window.PassagensModule && typeof window.PassagensModule.search === 'function') {
     try {
+      debugLog('Iniciando busca inicial de passagens...');
       await window.PassagensModule.search();
+      debugLog('✅ Busca inicial de passagens concluída');
     } catch (error) {
+      debugLog('⚠️ Erro na busca inicial de passagens:', error);
       console.warn('⚠️ Erro na busca inicial de passagens:', error);
     }
   }
+  
+  debugLog('🔄 Pós-autenticação concluída');
 }
 
 /**
- * Atualiza contexto global após autenticação
+ * Atualiza contexto global após autenticação - COM DEBUG DETALHADO
  */
 function updateGlobalContext() {
+  debugAuth('🔄 updateGlobalContext() iniciado');
+  
   if (window.AuthModule) {
     CTX = window.AuthModule.getCurrentUser();
     AUTH_MODE = window.AuthModule.getAuthMode();
     USER_PROFILE = window.AuthModule.getProfile();
     
+    debugAuth('Contexto capturado do AuthModule:');
+    debugAuth('  - CTX:', CTX);
+    debugAuth('  - AUTH_MODE:', AUTH_MODE);
+    debugAuth('  - USER_PROFILE:', USER_PROFILE);
+    
     setUser(CTX?.nome || '');
     
     // Aplica controles de perfil
     if (USER_PROFILE) {
+      debugAuth('Aplicando controles de perfil...');
       applyProfileControls(USER_PROFILE);
+    } else {
+      debugAuth('⚠️ USER_PROFILE não definido!');
     }
     
-    console.log('🔄 Contexto global atualizado:', {
+    debugAuth('🔄 Contexto global atualizado:', {
       nome: CTX?.nome,
       profile: USER_PROFILE,
       auth_mode: AUTH_MODE,
       isFiscal: CTX?.isFiscal,
       isAdmin: CTX?.isAdmin
     });
+  } else {
+    debugAuth('❌ AuthModule não disponível!');
   }
 }
 
@@ -328,16 +395,18 @@ function updateGlobalContext() {
  * Callback para sucesso de autenticação
  */
 async function onAuthSuccess() {
+  debugAuth('✅ onAuthSuccess() chamado');
   updateGlobalContext();
-  console.log('✅ Autenticação bem-sucedida, contexto atualizado');
+  debugAuth('✅ Autenticação bem-sucedida, contexto atualizado');
 }
 
 /**
  * Callback para inicialização pós-autenticação
  */
 async function onPostAuthInit() {
+  debugLog('✅ onPostAuthInit() chamado');
   await postAuthInit();
-  console.log('✅ Inicialização pós-auth concluída');
+  debugLog('✅ Inicialização pós-auth concluída');
 }
 
 // ===================================================================================================
@@ -348,13 +417,17 @@ async function onPostAuthInit() {
  * Configura event listeners de coordenação principal
  */
 function bindMainEventListeners() {
+  debugLog('🔗 Configurando event listeners principais...');
+  
   // Navegação entre abas principais
   $$('.tablink').forEach(button => {
     button.addEventListener('click', () => {
       const tab = button.dataset.tab;
+      debugLog(`Clique na aba: ${tab}`);
       
       // Verifica permissão antes de navegar
       if (tab === 'cadastros' && !isAdmin()) {
+        debugLog(`🚫 Tentativa de acesso negada à aba Cadastros (perfil: ${USER_PROFILE})`);
         console.warn('🚫 Tentativa de acesso negada à aba Cadastros');
         return;
       }
@@ -365,8 +438,28 @@ function bindMainEventListeners() {
 
   // Navegação entre sub-abas (delegada)
   $$('.sublink').forEach(button => {
-    button.addEventListener('click', () => setSub(button.dataset.sub));
+    button.addEventListener('click', () => {
+      const sub = button.dataset.sub;
+      debugLog(`Clique na sub-aba: ${sub}`);
+      setSub(sub);
+    });
   });
+  
+  debugLog('🔗 Event listeners configurados');
+}
+
+/**
+ * Controla navegação entre sub-abas (delegada para PassagensModule)
+ */
+function setSub(id) {
+  debugLog(`setSub('${id}') chamado`);
+  if (window.PassagensModule && typeof window.PassagensModule.setActiveSubModule === 'function') {
+    window.PassagensModule.setActiveSubModule(id);
+  } else {
+    // Fallback básico se módulo não disponível
+    $$('.sublink').forEach(b => b.classList.toggle('active', b.dataset.sub === id));
+    $$('.subtab').forEach(t => t.classList.toggle('active', t.id === `sub-${id}`));
+  }
 }
 
 // ===================================================================================================
@@ -374,43 +467,61 @@ function bindMainEventListeners() {
 // ===================================================================================================
 
 /**
- * Boot principal da aplicação
+ * Boot principal da aplicação - COM DEBUG DETALHADO
  */
 async function boot() {
-  console.log('🚀 Iniciando PSWEB com autenticação JavaScript...');
+  console.log('🚀 Iniciando PSWEB...');
 
   try {
-    // 1. Configura event listeners principais
+    // 1. Carrega configuração de debug do backend
+    debugLog('Carregando configuração de debug...');
+    await loadDebugConfig();
+    
+    // 2. Configura event listeners principais
+    debugLog('Configurando event listeners...');
     bindMainEventListeners();
 
-    // 2. Inicializa todos os módulos
+    // 3. Inicializa todos os módulos
+    debugLog('Inicializando módulos...');
     await initializeModules();
 
-    // 3. Configura callbacks para autenticação
+    // 4. Configura callbacks para autenticação
+    debugAuth('Configurando callbacks de autenticação...');
     if (window.AuthModule) {
       window.AuthModule.onAuthSuccess(onAuthSuccess);
       window.AuthModule.onPostAuthInit(onPostAuthInit);
+      debugAuth('Callbacks configurados');
+    } else {
+      debugAuth('❌ AuthModule não disponível para configurar callbacks');
     }
 
-    // 4. Inicia processo de autenticação
+    // 5. Inicia processo de autenticação
+    debugAuth('Iniciando processo de autenticação...');
     if (window.AuthModule) {
       const authenticated = await window.AuthModule.checkAuth();
       if (authenticated) {
+        debugAuth('✅ Sistema autenticado, atualizando contexto...');
         updateGlobalContext();
+        debugAuth('Iniciando pós-autenticação...');
         await postAuthInit();
+        debugAuth('✅ Sistema completamente inicializado');
         console.log('✅ Sistema autenticado e inicializado');
       } else {
+        debugAuth('❌ Falha na autenticação');
         console.error('❌ Falha na autenticação');
         alert('Falha na autenticação. Verifique se você está cadastrado no sistema.');
       }
     } else {
+      debugAuth('❌ AuthModule não disponível');
       console.error('⚠️ AuthModule não disponível');
       alert('Erro: Módulo de autenticação não carregado');
     }
 
+    debugLog('✅ PSWEB boot concluído');
     console.log('✅ PSWEB inicializado com sucesso');
 
   } catch (error) {
+    debugLog('❌ Erro fatal na inicialização:', error);
     console.error('❌ Erro fatal na inicialização:', error);
     alert('Erro na inicialização da aplicação: ' + error.message);
   }
@@ -437,6 +548,28 @@ window.isWindowsAuth = isWindowsAuth;
 window.isAdmin = isAdmin;
 window.isFiscal = isFiscal;
 window.applyProfileControls = applyProfileControls;
+
+// === FUNÇÕES DE DEBUG EXPOSTAS GLOBALMENTE ===
+window.debugApp = {
+  showContext: () => {
+    console.log('=== CONTEXTO ATUAL ===');
+    console.log('CTX:', CTX);
+    console.log('USER_PROFILE:', USER_PROFILE);
+    console.log('AUTH_MODE:', AUTH_MODE);
+    console.log('isAdmin():', isAdmin());
+    console.log('isFiscal():', isFiscal());
+    console.log('DEBUG_CONFIG:', DEBUG_CONFIG);
+  },
+  testProfileControls: (profile) => {
+    console.log(`Testando perfil: ${profile}`);
+    applyProfileControls(profile);
+  },
+  enableDebug: () => {
+    DEBUG_CONFIG.DEBUG = true;
+    DEBUG_CONFIG.DEBUG_AUTH = true;
+    console.log('Debug habilitado manualmente');
+  }
+};
 
 // ===================================================================================================
 // INICIALIZAÇÃO AUTOMÁTICA

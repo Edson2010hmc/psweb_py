@@ -1,18 +1,27 @@
 /**
- * Módulo de Autenticação - Cliente JavaScript - CORRIGIDO
- * Localização: frontend/static/js/modules/auth/auth.js
- * 
- * Responsabilidades:
- * - Captura AUTOMÁTICA de dados da máquina cliente (username, computername, etc.)
- * - Autenticação via API backend com dados do cliente
- * - Controle de perfis (USUARIO/ADMIN)
- * - Controle de visibilidade baseado em perfil
- * - Gerenciamento de token JWT
- * - SEM PROMPTS MANUAIS - TUDO AUTOMÁTICO
+ * ARQUIVO: frontend/static/js/modules/auth/auth.js
+ * Módulo de Autenticação - Captura Windows no Servidor - COM DEBUG
  */
 
 const AuthModule = (function() {
     'use strict';
+
+    // ===================================================================================================
+    // CONFIGURAÇÃO DE DEBUG
+    // ===================================================================================================
+    const DEBUG = true; // ← Controle manual de debug (pode vir do servidor depois)
+    
+    function debugLog(message, data = null) {
+        if (DEBUG) {
+            console.log(`🔧 AUTH DEBUG: ${message}`, data ? data : '');
+        }
+    }
+
+    function debugError(message, error = null) {
+        if (DEBUG) {
+            console.error(`❌ AUTH DEBUG: ${message}`, error ? error : '');
+        }
+    }
 
     // ===================================================================================================
     // ESTADO INTERNO DO MÓDULO
@@ -20,252 +29,6 @@ const AuthModule = (function() {
     let context = null;
     let authToken = null;
     let authConfig = null;
-
-    // ===================================================================================================
-    // CAPTURA AUTOMÁTICA DE DADOS DO CLIENTE
-    // ===================================================================================================
-    
-    /**
-     * Captura username da máquina cliente - VERSÃO CORRIGIDA
-     */
-    function getClientUsername() {
-        console.log('🔍 Iniciando captura de username...');
-        
-        try {
-            let username = null;
-            
-            // Estratégia 1: Variáveis de ambiente (Node.js/Electron/Aplicação desktop)
-            if (typeof process !== 'undefined' && process.env) {
-                username = process.env.USERNAME || process.env.USER;
-                if (username) {
-                    console.log('✅ Username capturado via process.env:', username);
-                    return username;
-                }
-            }
-            
-            // Estratégia 2: ActiveX Object (Internet Explorer/Edge Legacy)
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshNetwork = new ActiveXObject("WScript.Network");
-                    username = wshNetwork.UserName;
-                    if (username) {
-                        console.log('✅ Username capturado via ActiveX:', username);
-                        return username;
-                    }
-                }
-            } catch (activeXError) {
-                console.log('⚠️ ActiveX não disponível:', activeXError.message);
-            }
-            
-            // Estratégia 3: WScript.Shell (se disponível)
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshShell = new ActiveXObject("WScript.Shell");
-                    const userProfile = wshShell.ExpandEnvironmentStrings("%USERNAME%");
-                    if (userProfile && userProfile !== "%USERNAME%") {
-                        console.log('✅ Username capturado via WScript.Shell:', userProfile);
-                        return userProfile;
-                    }
-                }
-            } catch (wscriptError) {
-                console.log('⚠️ WScript.Shell não disponível:', wscriptError.message);
-            }
-            
-            // Estratégia 4: Variáveis globais do Windows (se injetadas)
-            if (typeof window !== 'undefined' && window.USERNAME) {
-                username = window.USERNAME;
-                console.log('✅ Username capturado via window.USERNAME:', username);
-                return username;
-            }
-            
-            // Estratégia 5: Cookies ou sessionStorage (se definido por aplicação externa)
-            try {
-                const cookieUsername = document.cookie
-                    .split('; ')
-                    .find(row => row.startsWith('USERNAME='))
-                    ?.split('=')[1];
-                
-                if (cookieUsername) {
-                    console.log('✅ Username capturado via cookie:', cookieUsername);
-                    return cookieUsername;
-                }
-            } catch (cookieError) {
-                console.log('⚠️ Cookie USERNAME não disponível');
-            }
-            
-            // ❌ NENHUMA ESTRATÉGIA FUNCIONOU
-            console.error('❌ FALHA: Não foi possível capturar username automaticamente');
-            console.error('❌ Estratégias tentadas:');
-            console.error('   1. process.env.USERNAME/USER - Falhou');
-            console.error('   2. ActiveX WScript.Network - Falhou');
-            console.error('   3. WScript.Shell ExpandEnvironmentStrings - Falhou');
-            console.error('   4. window.USERNAME - Falhou');
-            console.error('   5. Document.cookie - Falhou');
-            
-            throw new Error('Não foi possível capturar username da máquina Windows automaticamente. Verifique se o navegador permite acesso às informações do sistema.');
-            
-        } catch (error) {
-            console.error('❌ Erro crítico na captura de username:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Captura nome do computador cliente
-     */
-    function getClientComputerName() {
-        console.log('🔍 Capturando nome do computador...');
-        
-        try {
-            let computerName = null;
-            
-            // Estratégia 1: Variáveis de ambiente
-            if (typeof process !== 'undefined' && process.env) {
-                computerName = process.env.COMPUTERNAME || process.env.HOSTNAME;
-                if (computerName) {
-                    console.log('✅ Computername capturado via process.env:', computerName);
-                    return computerName;
-                }
-            }
-            
-            // Estratégia 2: ActiveX (IE/Edge legacy)
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshNetwork = new ActiveXObject("WScript.Network");
-                    computerName = wshNetwork.ComputerName;
-                    if (computerName) {
-                        console.log('✅ Computername capturado via ActiveX:', computerName);
-                        return computerName;
-                    }
-                }
-            } catch (e) {
-                console.log('⚠️ ActiveX computername não disponível');
-            }
-            
-            // Estratégia 3: WScript.Shell
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshShell = new ActiveXObject("WScript.Shell");
-                    computerName = wshShell.ExpandEnvironmentStrings("%COMPUTERNAME%");
-                    if (computerName && computerName !== "%COMPUTERNAME%") {
-                        console.log('✅ Computername capturado via WScript.Shell:', computerName);
-                        return computerName;
-                    }
-                }
-            } catch (e) {
-                console.log('⚠️ WScript.Shell computername não disponível');
-            }
-            
-            // Estratégia 4: Hostname do navegador (limitado)
-            if (window.location && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                computerName = window.location.hostname.toUpperCase();
-                console.log('✅ Computername via hostname:', computerName);
-                return computerName;
-            }
-            
-            // Fallback
-            computerName = 'UNKNOWN_COMPUTER';
-            console.log('⚠️ Usando fallback para computername:', computerName);
-            return computerName;
-            
-        } catch (error) {
-            console.error('❌ Erro ao capturar nome do computador:', error);
-            return 'ERROR_COMPUTER';
-        }
-    }
-    
-    /**
-     * Captura domínio do cliente
-     */
-    function getClientDomain() {
-        console.log('🔍 Capturando domínio...');
-        
-        try {
-            let domain = null;
-            
-            // Estratégia 1: Variáveis de ambiente
-            if (typeof process !== 'undefined' && process.env) {
-                domain = process.env.USERDOMAIN || process.env.DOMAIN;
-                if (domain) {
-                    console.log('✅ Domínio capturado via process.env:', domain);
-                    return domain;
-                }
-            }
-            
-            // Estratégia 2: ActiveX
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshNetwork = new ActiveXObject("WScript.Network");
-                    domain = wshNetwork.UserDomain;
-                    if (domain) {
-                        console.log('✅ Domínio capturado via ActiveX:', domain);
-                        return domain;
-                    }
-                }
-            } catch (e) {
-                console.log('⚠️ ActiveX domain não disponível');
-            }
-            
-            // Estratégia 3: WScript.Shell
-            try {
-                if (typeof ActiveXObject !== 'undefined') {
-                    const wshShell = new ActiveXObject("WScript.Shell");
-                    domain = wshShell.ExpandEnvironmentStrings("%USERDOMAIN%");
-                    if (domain && domain !== "%USERDOMAIN%") {
-                        console.log('✅ Domínio capturado via WScript.Shell:', domain);
-                        return domain;
-                    }
-                }
-            } catch (e) {
-                console.log('⚠️ WScript.Shell domain não disponível');
-            }
-            
-            // Fallback
-            domain = 'WORKGROUP';
-            console.log('⚠️ Usando fallback para domínio:', domain);
-            return domain;
-            
-        } catch (error) {
-            console.error('❌ Erro ao capturar domínio:', error);
-            return 'UNKNOWN_DOMAIN';
-        }
-    }
-    
-    /**
-     * Monta dados completos do cliente para autenticação
-     */
-    function buildClientAuthData() {
-        console.log('🏗️ Montando dados de autenticação...');
-        
-        // CAPTURA OBRIGATÓRIA DO USERNAME
-        const username = getClientUsername(); // Pode lançar erro se falhar
-        
-        const clientData = {
-            username: username,
-            computerName: getClientComputerName(),
-            domain: getClientDomain(),
-            clientIP: null, // Será preenchido pelo servidor
-            userAgent: navigator.userAgent,
-            timestamp: Date.now(),
-            additional_info: {
-                screen_resolution: `${screen.width}x${screen.height}`,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                language: navigator.language,
-                platform: navigator.platform,
-                browser: navigator.appName,
-                version: navigator.appVersion
-            }
-        };
-        
-        console.log('📋 Dados de autenticação montados:', {
-            username: clientData.username,
-            computerName: clientData.computerName,
-            domain: clientData.domain,
-            timestamp: new Date(clientData.timestamp).toISOString()
-        });
-        
-        return clientData;
-    }
 
     // ===================================================================================================
     // APIs ESPECÍFICAS DO MÓDULO
@@ -276,11 +39,10 @@ const AuthModule = (function() {
             return response.json();
         },
 
-        async authenticateClient(clientData) {
-            const response = await fetch('/api/auth/client', {
+        async authenticateWindows() {
+            const response = await fetch('/api/auth/windows', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(clientData)
+                headers: { 'Content-Type': 'application/json' }
             });
             
             if (!response.ok) {
@@ -314,6 +76,11 @@ const AuthModule = (function() {
                 headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
             });
             return response.json();
+        },
+
+        async testWindowsCapture() {
+            const response = await fetch('/api/auth/test-windows');
+            return response.json();
         }
     };
 
@@ -325,11 +92,13 @@ const AuthModule = (function() {
     }
 
     function showError(message) {
+        debugError('showError chamado', message);
         console.error('❌ Auth Error:', message);
         alert('Erro de Autenticação:\n\n' + message);
     }
 
     function showMessage(message) {
+        debugLog('showMessage chamado', message);
         console.log('ℹ️ Auth Info:', message);
     }
 
@@ -337,11 +106,19 @@ const AuthModule = (function() {
     // CONTROLE DE INTERFACE E PERFIS
     // ===================================================================================================
     function setUserDisplay(name) {
+        debugLog('setUserDisplay chamado', { name });
         const userNameEl = getElement('userName');
-        if (userNameEl) userNameEl.textContent = name || '';
+        if (userNameEl) {
+            userNameEl.textContent = name || '';
+            debugLog('Nome do usuário atualizado na interface', name);
+        } else {
+            debugError('Elemento userName não encontrado');
+        }
     }
 
     function applyProfileBasedUI(profile) {
+        debugLog('applyProfileBasedUI chamado', { profile });
+        
         /**
          * Controla visibilidade baseada no perfil:
          * - USUARIO (só fiscal): Botão "Cadastros" oculto
@@ -350,15 +127,18 @@ const AuthModule = (function() {
         
         // Controla botão "Cadastros" na navegação principal
         const cadastrosButton = document.querySelector('.tablink[data-tab="cadastros"]');
+        debugLog('Botão cadastros encontrado?', !!cadastrosButton);
         
         if (cadastrosButton) {
             if (profile === 'ADMIN') {
                 cadastrosButton.style.display = ''; // Visível para admins
                 cadastrosButton.disabled = false;
+                debugLog('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
                 console.log('✅ Botão Cadastros VISÍVEL (perfil ADMIN)');
             } else {
                 cadastrosButton.style.display = 'none'; // Oculto para usuários
                 cadastrosButton.disabled = true;
+                debugLog('❌ Botão Cadastros OCULTO (perfil USUARIO)');
                 console.log('❌ Botão Cadastros OCULTO (perfil USUARIO)');
                 
                 // Se está na aba cadastros, volta para início
@@ -366,25 +146,35 @@ const AuthModule = (function() {
                 if (cadastrosTab && cadastrosTab.classList.contains('active')) {
                     if (typeof window.setTab === 'function') {
                         window.setTab('consultas');
+                        debugLog('Redirecionado da aba cadastros para consultas');
                     }
                 }
             }
+        } else {
+            debugError('Botão cadastros não encontrado no DOM!');
         }
         
+        debugLog(`🎯 Perfil ${profile} aplicado na interface`);
         console.log(`🎯 Perfil ${profile} aplicado na interface`);
     }
 
     function updateContextualInfo(userContext) {
+        debugLog('updateContextualInfo chamado', userContext);
+        
         /**
          * Atualiza informações contextuais na interface
          */
         
         // Atualiza nome do usuário
+        debugLog('Atualizando nome do usuário', userContext?.nome);
         setUserDisplay(userContext?.nome || '');
         
         // Aplica perfil na UI
         if (userContext?.profile) {
+            debugLog('Aplicando perfil na UI', userContext.profile);
             applyProfileBasedUI(userContext.profile);
+        } else {
+            debugError('userContext.profile não encontrado!', userContext);
         }
         
         // Atualiza título se necessário
@@ -392,15 +182,18 @@ const AuthModule = (function() {
         if (subTitle && userContext?.profile) {
             const profileText = userContext.profile === 'ADMIN' ? 'Administrador' : 'Usuário';
             subTitle.textContent = `Fiscalização SUB/SSUB/MIS - ${profileText}`;
+            debugLog('Título atualizado', profileText);
         }
         
         // Log para debug
-        console.log('🔄 Interface atualizada:', {
+        const contextInfo = {
             nome: userContext?.nome,
             profile: userContext?.profile,
             isFiscal: userContext?.isFiscal,
             isAdmin: userContext?.isAdmin
-        });
+        };
+        debugLog('🔄 Interface atualizada', contextInfo);
+        console.log('🔄 Interface atualizada:', contextInfo);
     }
 
     // ===================================================================================================
@@ -408,45 +201,57 @@ const AuthModule = (function() {
     // ===================================================================================================
     async function performAuthentication() {
         try {
-            console.log('🚀 Iniciando processo de autenticação automática...');
+            debugLog('🚀 Iniciando autenticação Windows via servidor...');
+            console.log('🚀 Iniciando autenticação Windows via servidor...');
             
             // 1. Obtém configurações do servidor
-            console.log('📡 Obtendo configurações do servidor...');
+            debugLog('📡 Obtendo configurações do servidor...');
             authConfig = await api.getAuthInfo();
-            console.log('✅ Configuração recebida:', authConfig);
-            
-            // 2. Coleta dados do cliente (pode falhar aqui se não conseguir username)
-            console.log('💻 Coletando dados da máquina cliente...');
-            const clientData = buildClientAuthData(); // Pode lançar exceção
-            
-            // 3. Autentica no servidor
-            console.log('🔐 Enviando dados para autenticação...');
-            const authResult = await api.authenticateClient(clientData);
-            console.log('✅ Autenticação bem-sucedida:', {
-                profile: authResult.profile,
-                nome: authResult.user?.nome,
-                message: authResult.message
+            debugLog('✅ Configuração recebida', {
+                auth_mode: authConfig.auth_mode,
+                auth_field: authConfig.auth_field,
+                windows_user: authConfig.windows_info?.username,
+                computer: authConfig.windows_info?.computer
             });
             
-            // 4. Armazena token e contexto
+            // 2. Autentica via servidor (que captura credenciais Windows)
+            debugLog('🔐 Autenticando via servidor...');
+            const authResult = await api.authenticateWindows();
+            debugLog('✅ Autenticação bem-sucedida', {
+                profile: authResult.profile,
+                nome: authResult.user?.nome,
+                message: authResult.message,
+                full_result: authResult
+            });
+            
+            // 3. Armazena token e contexto
             authToken = authResult.token;
             context = authResult.user;
             
-            // 5. Atualiza interface
+            debugLog('📝 Token e contexto armazenados', {
+                token_length: authToken?.length,
+                context: context
+            });
+            
+            // 4. Atualiza interface
+            debugLog('🖥️ Atualizando interface...');
             updateContextualInfo(context);
             
+            debugLog('✅ Processo de autenticação concluído com sucesso');
             console.log('✅ Processo de autenticação concluído com sucesso');
             return context;
             
         } catch (error) {
+            debugError('❌ FALHA na autenticação', error);
             console.error('❌ FALHA na autenticação:', error);
-            showError(error.message + '\n\nVerifique se:\n1. Você está cadastrado no sistema\n2. O navegador permite acesso às informações do Windows\n3. A rede permite conexão com o servidor');
+            showError(error.message + '\n\nVerifique se:\n1. Você está cadastrado no sistema como Fiscal ou Administrador\n2. O servidor consegue capturar suas credenciais Windows\n3. A rede permite conexão com o servidor');
             return null;
         }
     }
 
     async function performLogout() {
         try {
+            debugLog('👋 Realizando logout...');
             console.log('👋 Realizando logout...');
             
             if (authToken) {
@@ -458,12 +263,14 @@ const AuthModule = (function() {
             context = null;
             authConfig = null;
             
+            debugLog('✅ Logout realizado, recarregando página...');
             console.log('✅ Logout realizado, recarregando página...');
             
             // Recarrega página para estado inicial
             location.reload();
             
         } catch (error) {
+            debugError('❌ Erro no logout', error);
             console.error('❌ Erro no logout:', error);
             // Força reload mesmo com erro
             location.reload();
@@ -472,26 +279,33 @@ const AuthModule = (function() {
 
     async function checkAuthStatus() {
         try {
+            debugLog('🔍 Verificando status de autenticação...');
+            
             if (!authToken || !context) {
+                debugLog('Token ou contexto não disponível, tentando autenticação');
                 // Tenta autenticação automática
                 return await performAuthentication();
             }
             
+            debugLog('Token disponível, verificando validade...');
             // Verifica se token ainda é válido
             const userInfo = await api.getCurrentUser();
             
             if (userInfo && userInfo.user) {
                 context = userInfo.user;
+                debugLog('Token válido, atualizando contexto', context);
                 updateContextualInfo(context);
                 return context;
             }
             
+            debugLog('Token inválido, tentando nova autenticação');
             // Token inválido, tenta nova autenticação
             authToken = null;
             context = null;
             return await performAuthentication();
             
         } catch (error) {
+            debugError('❌ Erro ao verificar status de auth', error);
             console.error('❌ Erro ao verificar status de auth:', error);
             // Tenta autenticação do zero
             authToken = null;
@@ -501,21 +315,43 @@ const AuthModule = (function() {
     }
 
     // ===================================================================================================
-    // EVENT LISTENERS - SIMPLIFICADO (SEM MODAL)
+    // EVENT LISTENERS - SIMPLIFICADO
     // ===================================================================================================
     function bindEvents() {
+        debugLog('🔗 Configurando event listeners...');
+        
         // Botão de logout
         const btnLogout = getElement('btnLogout');
         if (btnLogout) {
             btnLogout.addEventListener('click', performLogout);
+            debugLog('Event listener logout configurado');
         }
         
-        // REMOVE COMPLETAMENTE o modal de login
+        // Remove modal de login (não é mais necessário)
         const loginModal = getElement('loginModal');
         if (loginModal) {
             loginModal.style.display = 'none';
-            loginModal.remove(); // Remove do DOM
-            console.log('🗑️ Modal de login removido (não é mais necessário)');
+            loginModal.remove();
+            debugLog('🗑️ Modal de login removido (autenticação automática via servidor)');
+            console.log('🗑️ Modal de login removido (autenticação automática via servidor)');
+        }
+    }
+
+    // ===================================================================================================
+    // FUNÇÕES DE TESTE E DEBUG
+    // ===================================================================================================
+    async function testWindowsCapture() {
+        try {
+            debugLog('🧪 Testando captura Windows no servidor...');
+            console.log('🧪 Testando captura Windows no servidor...');
+            const result = await api.testWindowsCapture();
+            debugLog('✅ Teste bem-sucedido', result);
+            console.log('✅ Teste bem-sucedido:', result);
+            return result;
+        } catch (error) {
+            debugError('❌ Erro no teste', error);
+            console.error('❌ Erro no teste:', error);
+            throw error;
         }
     }
 
@@ -525,9 +361,12 @@ const AuthModule = (function() {
     return {
         // Inicialização
         async init() {
-            console.log('🔧 Inicializando AuthModule (captura automática)...');
+            debugLog('🔧 Inicializando AuthModule (Windows no servidor)...');
+            console.log('🔧 Inicializando AuthModule (Windows no servidor)...');
             bindEvents();
-            return await checkAuthStatus();
+            const result = await checkAuthStatus();
+            debugLog('Init concluído', { authenticated: !!result });
+            return result;
         },
 
         // Métodos de autenticação
@@ -545,15 +384,18 @@ const AuthModule = (function() {
 
         // Getters de estado
         isAuthenticated() {
-            return context !== null && authToken !== null;
+            const result = context !== null && authToken !== null;
+            debugLog('isAuthenticated', result);
+            return result;
         },
 
         getCurrentUser() {
+            debugLog('getCurrentUser', context);
             return context;
         },
 
         getAuthMode() {
-            return 'client_javascript';
+            return 'windows_server';
         },
 
         getContext() {
@@ -561,16 +403,22 @@ const AuthModule = (function() {
         },
 
         getProfile() {
-            return context?.profile || null;
+            const profile = context?.profile || null;
+            debugLog('getProfile', profile);
+            return profile;
         },
 
         // Verificações de perfil
         isAdmin() {
-            return context?.profile === 'ADMIN';
+            const result = context?.profile === 'ADMIN';
+            debugLog('isAdmin', result);
+            return result;
         },
 
         isFiscal() {
-            return context?.isFiscal === true;
+            const result = context?.isFiscal === true;
+            debugLog('isFiscal', result);
+            return result;
         },
 
         // Controle de interface
@@ -579,6 +427,7 @@ const AuthModule = (function() {
         },
 
         applyProfileUI(profile) {
+            debugLog('applyProfileUI chamado externamente', profile);
             applyProfileBasedUI(profile);
         },
 
@@ -591,15 +440,39 @@ const AuthModule = (function() {
             window.onPostAuthInit = callback;
         },
 
-        // Funções de compatibilidade (removidas/simplificadas)
-        showLoginModal() {
-            console.log('⚠️ showLoginModal() não é mais usado - autenticação é automática');
+        // Funções de teste
+        async testWindows() {
+            return await testWindowsCapture();
         },
 
-        hideLoginModal() {
-            console.log('⚠️ hideLoginModal() não é mais usado');
+        // Informações de debug
+        getAuthConfig() {
+            return authConfig;
         },
 
+        getToken() {
+            return authToken;
+        },
+
+        // === FUNÇÕES DE DEBUG ESPECÍFICAS ===
+        debugState() {
+            return {
+                context,
+                authToken: authToken ? `${authToken.substring(0, 20)}...` : null,
+                authConfig,
+                isAuthenticated: this.isAuthenticated(),
+                profile: this.getProfile()
+            };
+        },
+
+        forceUpdateUI() {
+            debugLog('forceUpdateUI chamado manualmente');
+            if (context) {
+                updateContextualInfo(context);
+            }
+        },
+
+        // Funções de compatibilidade
         applyDesembarcanteLock() {
             // Mantido para compatibilidade
             const el = getElement('fDesCNome');
@@ -607,6 +480,7 @@ const AuthModule = (function() {
                 el.value = context.nome || '';
                 el.readOnly = true;
                 el.setAttribute('aria-readonly', 'true');
+                debugLog('applyDesembarcanteLock aplicado', context.nome);
             }
         }
     };

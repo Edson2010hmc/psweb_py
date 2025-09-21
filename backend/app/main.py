@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PSWEB Python - Aplicação Principal - CORRIGIDO
+ARQUIVO: backend/app/main.py
+PSWEB Python - Aplicação Principal - COM DEBUG CONDICIONAL
 """
 
 from fastapi import FastAPI, Request, HTTPException
@@ -55,7 +56,7 @@ STATIC_DIR = FRONTEND_DIR / "static"
 # Templates (Jinja2)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Static files - CORRIGIDO: Agora aponta para o diretório correto
+# Static files
 try:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -65,14 +66,36 @@ try:
 except Exception as e:
     logger.error(f"Erro ao montar arquivos estáticos: {e}")
 
-# === INCLUIR TODAS AS APIs COM REGRAS DE NEGÓCIO REFATORADAS ===
-app.include_router(auth_router, tags=["Autenticação"])  # NOVO: Autenticação JavaScript
+# === INCLUIR TODAS AS APIs ===
+app.include_router(auth_router, tags=["Autenticação"])
 app.include_router(fiscais_api.router, tags=["Fiscais"])
 app.include_router(embarcacoes_router, tags=["Embarcações"]) 
 app.include_router(passagens_api.router, tags=["Passagens"])
 app.include_router(administradores_router, tags=["Administradores"])
 
-# === FRONTEND - APENAS INTERFACE ===
+# === ROTA DE DEBUG CONDICIONAL ===
+if settings.DEBUG:
+    @app.get("/debug-system")
+    async def debug_system():
+        """[DEBUG] Informações do sistema - só aparece em debug mode"""
+        return {
+            "debug_mode": True,
+            "message": "Sistema em modo DEBUG",
+            "config": {
+                "DEBUG": settings.DEBUG,
+                "DEBUG_AUTH": settings.DEBUG_AUTH,
+                "DEBUG_ROUTES": settings.DEBUG_ROUTES,
+                "AUTH_FIELD": settings.AUTH_FIELD
+            },
+            "available_debug_routes": [
+                "/api/auth/debug-full",
+                "/api/auth/debug-config", 
+                "/api/auth/test-windows",
+                "/debug-system"
+            ] if settings.DEBUG_AUTH else ["/debug-system"]
+        }
+
+# === FRONTEND ===
 @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
 async def root(request: Request):
     """Serve a interface web"""
@@ -86,14 +109,21 @@ async def root(request: Request):
 @app.get("/api", tags=["Sistema"])
 async def api_root():
     """Endpoint raiz da API"""
-    return {
+    response = {
         "message": "PSWEB Python API",
         "version": "2.0.0",
         "status": "running",
         "docs": "/docs",
-        "auth_mode": "client_javascript",
+        "auth_mode": "windows_server",
         "auth_field": settings.AUTH_FIELD
     }
+    
+    # Adiciona informações de debug se habilitado
+    if settings.DEBUG:
+        response["debug_mode"] = True
+        response["debug_routes_enabled"] = settings.DEBUG_AUTH
+        
+    return response
 
 @app.get("/health", tags=["Sistema"])
 async def health_check():
@@ -112,38 +142,49 @@ async def health_check():
         logger.error(f"Erro no health check do banco: {e}")
         db_status = "error"
     
-    return {
+    response = {
         "status": "ok",
         "database": db_status,
         "version": "2.0.0",
-        "static_dir": str(STATIC_DIR),
-        "templates_dir": str(TEMPLATES_DIR),
-        "auth_mode": "client_javascript",
+        "auth_mode": "windows_server",
         "auth_field": settings.AUTH_FIELD
     }
+    
+    # Adiciona informações de debug se habilitado
+    if settings.DEBUG:
+        response["debug_mode"] = True
+        response["debug_config"] = {
+            "DEBUG": settings.DEBUG,
+            "DEBUG_AUTH": settings.DEBUG_AUTH,
+            "DEBUG_ROUTES": settings.DEBUG_ROUTES
+        }
+    
+    return response
 
 @app.on_event("startup")
 async def startup_event():
     """Inicialização da aplicação"""
     logger.info("Iniciando PSWEB Python API...")
-    
-    # Verificar estrutura de arquivos
-    logger.info(f"Base directory: {BASE_DIR}")
-    logger.info(f"Frontend directory: {FRONTEND_DIR}")
-    logger.info(f"Templates directory: {TEMPLATES_DIR} (exists: {TEMPLATES_DIR.exists()})")
-    logger.info(f"Static directory: {STATIC_DIR} (exists: {STATIC_DIR.exists()})")
-    
-    # Configurações de autenticação
-    logger.info(f"Modo de autenticação: client_javascript")
+    logger.info(f"Modo de autenticação: windows_server")
     logger.info(f"Campo de autenticação: {settings.AUTH_FIELD}")
-    logger.info(f"Autenticação Windows forçada: {settings.USE_WINDOWS_AUTH}")
     
-    if STATIC_DIR.exists():
-        # Listar arquivos estáticos encontrados
-        for root, dirs, files in os.walk(STATIC_DIR):
-            for file in files:
-                rel_path = Path(root).relative_to(STATIC_DIR) / file
-                logger.info(f"  Static file: {rel_path}")
+    # === LOG CONDICIONAL DE ROTAS ===
+    if settings.DEBUG_ROUTES:
+        logger.info("=== ROTAS REGISTRADAS (DEBUG) ===")
+        for route in app.routes:
+            if hasattr(route, 'methods') and hasattr(route, 'path'):
+                logger.info(f"  {list(route.methods)} {route.path}")
+        logger.info("=== FIM DAS ROTAS ===")
+    
+    # === LOG CONDICIONAL DE FLAGS DE DEBUG ===
+    if settings.DEBUG:
+        logger.info(f"🔧 DEBUG MODE: Habilitado")
+        logger.info(f"🔧 DEBUG_AUTH: {settings.DEBUG_AUTH}")
+        logger.info(f"🔧 DEBUG_ROUTES: {settings.DEBUG_ROUTES}")
+        if settings.DEBUG_AUTH:
+            logger.info("🔧 Rotas de debug auth disponíveis em /api/auth/debug-*")
+    else:
+        logger.info("🔒 Production mode - debug desabilitado")
     
     try:
         success = await init_database()
@@ -168,7 +209,7 @@ if __name__ == "__main__":
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"Interface web: http://{settings.HOST}:{settings.PORT}")
     logger.info(f"API Docs: http://{settings.HOST}:{settings.PORT}/docs")
-    logger.info(f"Autenticação: JavaScript Client ({settings.AUTH_FIELD})")
+    logger.info(f"Autenticação: Windows Server ({settings.AUTH_FIELD})")
     
     uvicorn.run(
         "main:app",

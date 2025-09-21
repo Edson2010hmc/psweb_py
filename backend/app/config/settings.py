@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+ARQUIVO: backend/app/config/settings.py
 Configurações da aplicação PSWEB Python
 """
 
@@ -23,15 +24,20 @@ class Settings:
     USE_WINDOWS_AUTH: bool = True  # SEMPRE True - sistema requer autenticação Windows
     STORAGE_DIR: str = "../storage"
     
-    # === NOVA CONFIGURAÇÃO DE AUTENTICAÇÃO ===
+    # === CONFIGURAÇÃO DE AUTENTICAÇÃO ===
     # Define qual campo será comparado com USERNAME do Windows
     # Valores aceitos: "NOME" ou "CHAVE"
     AUTH_FIELD: str = "NOME"  # Padrão: compara com o campo NOME
     
+    # === CONFIGURAÇÃO DE DEBUG ===
+    # Habilita rotas de debug e logs extras
+    DEBUG: bool = True
+    DEBUG_AUTH: bool = True  # NOVO: Habilita rotas de debug específicas de autenticação
+    DEBUG_ROUTES: bool = True  # NOVO: Habilita log detalhado de rotas
+    
     # Servidor
     HOST: str = "127.0.0.1"
     PORT: int = 8000
-    DEBUG: bool = True
     
     # PDF
     PDF_LOGO: Optional[str] = None
@@ -62,7 +68,7 @@ class Settings:
                             # Converte tipos conforme necessário
                             if key in ['DB_PORT', 'PORT']:
                                 value = int(value)
-                            elif key in ['USE_WINDOWS_AUTH', 'DEBUG']:
+                            elif key in ['USE_WINDOWS_AUTH', 'DEBUG', 'DEBUG_AUTH', 'DEBUG_ROUTES']:
                                 value = value.lower() in ['true', '1', 'yes']
                             elif key == 'AUTH_FIELD':
                                 # Valida valores aceitos para AUTH_FIELD
