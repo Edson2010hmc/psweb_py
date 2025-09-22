@@ -14,7 +14,7 @@ git add .
 
 :: Commit com a data atual
 echo [2] Fazendo commit...
-git commit -m "%date%"
+git commit -m "%date%-%time%"
 
 :: Configura usuário
 echo [3] Configurando usuário...
