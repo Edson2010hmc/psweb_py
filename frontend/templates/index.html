@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Passagem de Serviço</title>
+<link rel="stylesheet" href="/static/css/styles.css"/>
+</head>
+<body>
+<header class="app-header">
+  <img src="/static/assets/logo.png" class="logo" alt="logo"/>
+  <div class="titles">
+    <h2>PASSAGEM DE SERVIÇO</h2>
+    <small id="subTitle">Fiscalização SUB/SSUB/MIS</small>
+    
+  </div>
+  <div class="userbox">
+    <!-- FOTO DO USUÁRIO (pega do backend) ------------------------------------------------------------------->
+    <img id="userPhoto" src="/api/me/photo"
+         alt="Minha foto"
+         style="height:32px;width:32px;border-radius:50%;
+                object-fit:cover;border:1px solid var(--border);
+                margin-right:8px;display:none">
+    <span id="userName" class="tag"></span>
+     <span id="userProfile" class="profile-admin" style="display:none;">ADMINISTRADOR</span>
+    <button id="btnLogout" class="btn small secondary">Sair</button>
+  </div>
+</header>
+<!--MENU DE NAVEGAÇÃO--------------------------------------------------------------------------------------------------->
+<nav class="topnav">
+  <button class="tablink active" data-tab="consultas">Inicio</button>
+  <!--<button class="tablink" data-tab="passagem">Passagem</button>-->
+  <button class="tablink" data-tab="cadastros">Cadastros</button>
+  <span id="profile" class="msg-prof"></span>
+</nav>
+
+<main>
+  <section id="tab-consultas" class="tab active">
+    <div class="filters fadein">
+      <div class="field"><label>Início</label><input type="date" id="fInicio"></div>
+      <div class="field"><label>Fim</label><input type="date" id="fFim"></div>
+      <button id="btnBuscar" class="btn">Buscar</button>
+      <button id="btnNova" class="btn secondary">Nova PS</button>
+      <span id="msgNovaPS" class="msg-erro"></span>
+    </div>
+    <div class="list-container fadein"><ul id="listaPS"></ul></div>
+  </section>
+  <!----CABEÇALHO DA PASSAGEM DE SERVIÇO---------------------------------------------------------------------------------->
+  <section id="tab-passagem" class="tab">
+    <div id="psPlaceholder" class="placeholder">MÓDULO PASSAGEM DE SERVIÇO</div>
+    <div id="psForm" class="psform hidden">
+      <div class="ps-header card fadein">
+        <div class="row">
+          <div class="col"><label>Número PS</label><input type="text" id="fNumero"></div>
+          <div class="col"><label>Data Emissão</label><input type="date" id="fData"></div>
+          <div class="col"><label>Embarcação</label><input type="text" id="fEmb"></div>
+        </div>
+        <div class="row">
+          <div class="col"><label>Inicio Quinzena</label><input type="date" id="fInicioPS"></div>
+          <div class="col"><label>Fim Quinzena</label><input type="date" id="fFimPS"></div>
+          <div class="col"><label>Status da PS</label><input type="text" id="fStatus" disabled></div>
+        </div>
+        <div class="row">
+          <div class="col"><label>Fiscal Embarcando</label><select id="fEmbC"><option value="">— selecione —</option></select></div>
+          <div class="col"><label>Fiscal Desembarcando</label><input type="text" id="fDesCNome" placeholder="Seu nome completo"></div>
+          <div class="col"><label>&nbsp;</label><button id="btnDadosEmb" class="btn small">Dados & Especificações</button></div>
+        </div>
+        <div class="btns">
+          <button id="btnSalvar" class="btn">Salva rascunho</button>
+          <button id="btnFinalizar" class="btn">Finalizar (PDF)</button>
+          <button id="btnCopiar" class="btn secondary">Copiar para nova (14d)</button>
+          <button id="btnExcluirRasc" class="btn secondary">Excluir rascunho</button> <!-- NOVO -->
+        </div>
+      </div>
+      <!-----------------------------------------------SEÇÕES DA PASSAGEM DE SERVIÇO------------------------------------------------------>
+      <div class="tabs-sub">
+        <button class="sublink active" data-sub="porto">Porto</button>
+        <button class="sublink" data-sub="rotina">Rotina</button>
+        <button class="sublink" data-sub="sms">SMS</button>
+        <button class="sublink" data-sub="pendencias">Pendências</button>
+        <button class="sublink" data-sub="os">OS</button>
+        <button class="sublink" data-sub="gerais">Gerais</button>
+        <button class="sublink" data-sub="historico">Histórico</button>
+      </div>
+
+
+<!---------------SEÇÃO PORTO-------------------------------------------------------------------------------------------------------->
+<div class="subtab active" id="sub-porto">
+
+<div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;">  <!-- PRIMEIRA LINHA DE CARDS DA TELA PORTO-->
+
+  <!-- 1.1 Troca de Turma ---------------------------------------------------------------------------------------------------------->
+  <div class="card" style="height:100%;">
+    <h3>1.1 Troca de Turma</h3>
+    <div class="col">
+      <label>Porto *</label><input id="ttPorto" type="text" maxlength="100">
+      <label>Terminal *</label><input id="ttTerminal" type="text" maxlength="100">
+      <label>OS *</label><input id="ttOS" type="text" maxlength="50" style="width:160px;">
+      <label>Atracação (hh:mm) *</label><input width="100" id="ttAtracacao" type="time" style="width:100px;">
+      <label>Duração (min) *</label><input id="ttDuracao" type="number" step="0.01" min="0" style="width:100px;">
+      <label>Observações</label><textarea id="ttObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+    </div>
+  </div>
+
+  <!-- 1.2 Manutenção Preventiva ------------------------------------------------------------------------------------------------------->
+  <div class="card" style="height:100%;">
+    <h3>1.2 Manutenção Preventiva</h3>
+    <div class="col">
+
+      
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="mpNaoPrevisto" type="checkbox">
+        Não previsto para esse porto
+      </label>
+      
+      <div style="margin-bottom:8px;">
+        <label>Franquia solicitada (min)</label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
+          <input id="mpFranquia" type="number" step="1" min="0" style="width:160px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin:0;">
+            <input id="mpNaoSolicitada" type="checkbox"> Não solicitada
+          </label>
+        </div>
+      </div>
+      
+      <div style="margin-bottom:8px;">
+        <label>OS</label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
+          <input id="mpOS" type="text" maxlength="50" style="width:160px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin:0;">
+            <input id="mpNaoProgramada" type="checkbox"> Não programada
+          </label>
+        </div>
+      </div>
+
+      <label>Saldo de franquia (min)</label>
+      <input id="mpSaldo" type="number" step="1" min="0"style="width:100px;">
+
+      <label>RADE (anexo)</label>
+      <input id="mpRADE" type="file" accept="application/pdf,image/*">
+
+      <label>Observações</label>
+      <textarea id="mpObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+    </div>
+  </div>
+
+  <!-- 1.3 Abastecimento ---------------------------------------------------------------------------------------------------------->
+  <div class="card" style="height:100%;">
+    <h3>1.3 Abastecimento</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="abNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+      <label>OS</label><input id="abOS" type="text" maxlength="50" style="width:160px;">
+      <label>Quantidade (m³)</label><input id="abQtd" type="number" step="1" min="0" style="width:100px;">
+      <label>Duração (min)</label><input id="abDuracao" type="number" step="1" min="0" style="width:100px;">
+      <label>Anexo</label><input id="abAnexo" type="file">
+      <label>Observações</label><textarea id="abObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+    </div>
+  </div>
+
+</div>
+<div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;"><!-- SEGUNDA LINHA DE CARDS DA TELA PORTO-->
+
+  <!-- 1.4 Inspeção ANVISA --------------------------------------------------------------------------------------------------------->
+  <div class="card" style="height:100%;">
+    <h3>1.4 Inspeção ANVISA</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="anNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+      <label>OS</label>
+      <input id="anOS" type="text" maxlength="50" style="width:160px;">
+      <label>Descrição</label>
+      <input id="anDesc" type="text" maxlength="500">
+      <label>Observações</label>
+<textarea id="anObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+
+    </div>
+  </div>
+
+  <!-- 1.5 Inspeção de Classe ------------------------------------------------------------------------------------------------->
+  <div class="card" style="height:100%;">
+    <h3>1.5 Inspeção de Classe</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="clNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+      <label>OS</label>
+      <input id="clOS" type="text" maxlength="50" style="width:160px;">
+      <label>Descrição</label>
+      <input id="clDesc" type="text" maxlength="500">
+      <label>Observações</label>
+      <textarea id="clObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+
+    </div>
+  </div>
+
+  <!-- 1.6 Inspeções/Auditorias Petrobras -->
+  <div class="card" style="height:100%;">
+    <h3>1.6 Inspeções/Auditorias Petrobras</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="ipNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+      <label>Auditor</label>
+      <input id="ipAud" type="text" maxlength="200">
+      <label>Gerência</label>
+      <input id="ipGer" type="text" maxlength="200">
+      <label>Observações</label>
+      <textarea id="ipObs" maxlength="4000" rows="8" style="width:100%;resize:vertical;overflow:auto;"></textarea>
+    </div>
+  </div>
+
+</div>
+
+
+<div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;"><!-- TERCEIRA LINHA DE CARDS DA TELA PORTO -->
+
+  <!-- 1.7 Embarque de Equipes (lista) -->
+  <div class="card" style="height:100%;">
+    <h3>1.7 Embarque de Equipes</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="eqNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+    </div>
+    <table id="tblEq">
+      <thead><tr><th>Descrição</th><th>Empresa</th><th>Nome</th><th>Observações</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row">
+      <div class="col"><button id="btnAddEq" class="btn secondary">Adicionar linha</button></div>
+    </div>
+  </div>
+
+  <!-- 1.8 Embarque de Materiais (lista) -->
+  <div class="card" style="height:100%;">
+    <h3>1.8 Embarque de Materiais</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="emNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+    </div>
+    <table id="tblEM">
+      <thead><tr><th>Origem</th><th>OS</th><th>Destino</th><th>RT</th><th>Observações</th><th>Anexo</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row">
+      <div class="col"><button id="btnAddEM" class="btn secondary">Adicionar linha</button></div>
+    </div>
+  </div>
+
+  <!-- 1.9 Desembarque de Materiais (lista) -->
+  <div class="card" style="height:100%;">
+    <h3>1.9 Desembarque de Materiais</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="dmNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+    </div>
+    <table id="tblDM">
+      <thead><tr><th>OS</th><th>Origem</th><th>Destino</th><th>RT</th><th>Observações</th><th>Anexo</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row">
+      <div class="col"><button id="btnAddDM" class="btn secondary">Adicionar linha</button></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- QUARTA LINHA DE CARDS DA TELA PORTO -->
+<div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;">
+
+  <!-- 1.10 OS Mobilização/Desmobilização (lista) -->
+  <div class="card" style="height:100%;">
+    <h3>1.10 OS Mobilização/Desmobilização</h3>
+    <div class="col">
+      <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-bottom:8px;">
+        <input id="omNaoPrevisto" type="checkbox"> Não previsto para esse porto
+      </label>
+    </div>
+    <table id="tblOM">
+      <thead>
+        <tr><th>OS</th><th>Descrição</th><th>Observações</th><th>Anexo</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="row">
+      <div class="col"><button id="btnAddOM" class="btn secondary">Adicionar linha</button></div>
+    </div>
+  </div>
+
+  <!-- BOTÃO DE SALVAMENTO DOS DADOS DA SEÇÃO PORTO------------------------------------------------------ -->
+  <div class="card" style="text-align:right">
+    <button id="btnSalvarPorto" class="btn">Salvar</button>
+    <span id="msgSalvarPorto" class="msg-sucesso" style="margin-left:12px;"></span>
+  </div>
+
+</div>
+</div> <!-- FIM DA SEÇÃO PORTO -->
+
+
+      <!---------------SEÇÃO ROTINA-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-rotina"><div class="card"><h3>Rotina – campos prontos</h3></div></div>
+
+
+
+
+      <!---------------SEÇÃO SMS-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-sms"><div class="card"><h3>SMS – campos prontos</h3></div></div>
+
+
+
+
+      <!---------------SEÇÃO PENDENCIAS-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-pendencias"><div class="card"><h3>Pendências – campos prontos</h3></div></div>
+
+
+
+      <!---------------SEÇÃO ORDENS DE SERVIÇO-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-os"><div class="card"><h3>OS – campos prontos</h3></div></div>
+
+
+
+
+      <!---------------SEÇÃO INFORMAÇÕES GERAIS-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-gerais"><div class="card"><h3>Gerais – campos prontos</h3></div></div>
+
+
+
+
+
+      <!---------------SEÇÃO LOG-------------------------------------------------------------------------------------------------------->
+      <div class="subtab" id="sub-historico"><div class="card"><h3>Histórico – (AuditLog no back)</h3></div></div>
+    </div>
+  </section>
+
+
+
+
+
+  <!---------------CADASTROS  ADM-------------------------------------------------------------------------------------------------------->
+  <section id="tab-cadastros" class="tab">
+   
+
+    <!---------------ADM FISCAIS-------------------------------------------------------------------------------------------------------->
+   
+   <div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;">  <!-- PRIMEIRA LINHA DE CARDS DA TELA CADASTROS-->
+   
+    <div class="card fadein">
+      <h3>Fiscais</h3>
+            
+        <div class="col"><label>Chave</label><input id="cad_f_ch" type="text" maxlength="4" style="width:80px"></div>
+        <div class="col"><label>Nome</label><input id="cad_f_nome" type="text" style="width:400px"></div>
+        <div class="col"><label>Contato</label><input id="cad_f_tel" type="text" maxlength="15" style="width:180px"></div>
+        
+        <div class="row" style="align-items:flex-end; gap:8px; margin-top:8px">
+  <div class="col" style="min-width:300px">
+    <label>Fiscais cadastrados</label>
+    <select id="cad_f_list">
+      <option value="">— selecione —</option>
+      
+    </select>
+  </div>
+  <div class="col" style="flex:0 0 auto; display:flex; gap:8px">
+    <button id="btnSaveFiscal"    class="btn ghost" >Salvar</button>
+    <button id="btnFiscalEditar"  class="btn ghost" disabled>Editar</button>
+    <button id="btnFiscalExcluir" class="btn ghost" disabled>Excluir</button>
+    <div class="col" id="fiscEditActions" style="flex:0 0 auto; display:none; gap:8px">
+    <button id="btnFiscalConfirma" class="btn">Confirmar</button>
+    <button id="btnFiscalCancela"  class="btn ghost">Cancelar</button>
+    </div>
+  </div>
+ </div>
+</div> 
+
+    <!---------------ADM EMBARCAÇÕES-------------------------------------------------------------------------------------------------------->
+    <div class="card fadein">
+      <h3>Embarcações</h3>
+        <div class="col"><label>Tipo</label><input id="cad_e_tipo" type="text" style="width:200px"></div>
+
+        <div class="col"><label>Nome</label><input id="cad_e_nome" type="text" style="width:400px"></div>
+
+        <div class="col"><label>Primeiro Porto</label><input id="cad_e_primeira" type="date" placeholder="dd/mm/aaaa" style="width:200px"></div>
+     
+  <div class="row" style="align-items:flex-end; gap:8px; margin-top:8px">   
+  <div class="col" style="min-width:300px">
+            <label>Embarcações cadastradas</label>
+    <select id="cad_e_list"><option value="">— selecione —</option>
+      <!-- opções preenchidas via app.js -->
+    </select>
+  </div>
+
+    <div class="col" style="flex:0 0 auto; display:flex; gap:8px">
+    <button id="btnSaveEmb" class="btn ghost">Salvar</button>
+    <button id="btnEmbEditar"  class="btn ghost" disabled>Editar</button>
+    <button id="btnEmbExcluir" class="btn ghost" disabled>Excluir</button>
+    <div class="col" id="embEditActions" style="flex:0 0 auto; display:none; gap:8px">
+    <button id="btnEmbConfirma" class="btn">Confirmar</button>
+    <button id="btnEmbCancela"  class="btn ghost">Cancelar</button></div>
+  </div>
+  </div>
+  </div>
+
+  <div class="card fadein">
+      <h3>Administradores do Sistema</h3>
+            
+        <div class="col"><label>Chave</label><input id="cad_adm_ch" type="text" maxlength="4" style="width:80px"></div>
+        <div class="col"><label>Nome</label><input id="cad_adm_nome" type="text" style="width:400px"></div>
+        <div class="col"><label>Contato</label><input id="cad_adm_tel" type="text" maxlength="15" style="width:180px"></div>
+        
+        <div class="row" style="align-items:flex-end; gap:8px; margin-top:8px">
+  <div class="col" style="min-width:300px">
+    <label>Administradores cadastrados</label>
+    <select id="cad_adm_list">
+      <option value="">— selecione —</option>
+      
+    </select>
+  </div>
+  <div class="col" style="flex:0 0 auto; display:flex; gap:8px">
+    <button id="btnSaveAdm"    class="btn ghost" >Salvar</button>
+    <button id="btnAdmEditar"  class="btn ghost" disabled>Editar</button>
+    <button id="btnAdmlExcluir" class="btn ghost" disabled>Excluir</button>
+    <div class="col" id="admEditActions" style="flex:0 0 auto; display:none; gap:8px">
+    <button id="btnAdmConfirma" class="btn">Confirmar</button>
+    <button id="btnAdmCancela"  class="btn ghost">Cancelar</button>
+    </div>
+  </div>
+ </div>
+</div>
+      </div>
+   
+
+
+
+<!---------------ADM PASSAGEM DE SERVIÇOS-------------------------------------------------------------------------------------------------------->
+<div class="row" style="grid-template-columns:repeat(3,1fr); gap:12px;">  <!-- SEGUNDA LINHA DE CARDS DA TELA CADASTROS-->
+  <div class="card fadein">
+  <h3>Passagens de Serviços</h3>
+  <div class="row" style="align-items:flex-end; gap:8px">
+    <div class="col" style="min-width:340px">
+      <label>Passagens de Serviço (todas)</label>
+      <select id="admin_ps_list">
+        <option value="">— selecione —</option>
+        <!-- opções carregadas via app.js -->
+      </select>
+      <div class="muted" id="admin_ps_hint" style="margin-top:6px">Selecione uma PS para poder excluir.</div>
+    </div>
+    <div class="col" style="flex:0 0 auto">
+      <button id="btnAdminPSDelete" class="btn ghost" disabled>Excluir</button>
+    </div>
+  </div>
+</div> 
+
+</div>
+  </section>
+
+  <!-- Modal: Selecionar Embarcação para Nova PS ------------------------------------------------------------------------------>
+<div id="modalNovaPS" class="modal hidden" aria-hidden="true">
+  <div class="modal-content">
+    <h3>Selecionar embarcação</h3>
+
+    <div class="field">
+      <label for="selEmbNova">Embarcação</label>
+      <select id="selEmbNova">
+        <option value="">— selecione —</option>
+        <!-- opções serão preenchidas via app.js (EMB) -->
+      </select>
+    </div>
+
+    <div class="btns" style="margin-top:8px">
+      <button id="btnModalNovaConfirmar" class="btn" disabled>Confirmar</button>
+      <button id="btnModalNovaCancelar" class="btn secondary" type="button">Cancelar</button>
+    </div>
+
+    <div id="msgModalNovaPS" class="msg-erro"></div>
+  </div>
+</div>
+
+</main>
+
+<div id="loginModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Identificação</h3>
+    <p>Digite seu <strong>nome completo</strong> exatamente como cadastrado na lista de Fiscais.</p>
+    <input id="loginNome" type="text" placeholder="Seu nome completo"/>
+    <div class="btns"><button id="btnLogin" class="btn">Entrar</button></div>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- === MÓDULOS IMPLEMENTADOS === -->
+<!-- Autenticação -->
+<script src="/static/js/modules/auth/auth.js"></script>
+
+<!-- Cadastros -->
+<script src="/static/js/modules/fiscais/fiscais.js"></script>
+<script src="/static/js/modules/embarcacoes/embarcacoes.js"></script>
+<script src="/static/js/modules/administradores/administradores.js"></script>
+<script src="/static/js/modules/adm_passagens/adm_passagens.js"></script>
+
+<!-- Passagens de Serviço -->
+<script src="/static/js/modules/passagens/passagens.js"></script>
+
+<!-- Submódulos de PS -->
+<script src="/static/js/modules/passagens/sub_01_porto/porto.js"></script>
+
+<!-- === MODULO GERENCIADOR === -->
+<script src="/static/js/app.js"></script>
+</body>
+</html>

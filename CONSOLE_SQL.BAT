@@ -1,0 +1,1 @@
+C:\Users\Public\Firebird-4.0.5.3140-0-x64\isql.exe -user SYSDBA -password masterkey "C:\Users\Public\psweb_py\backend\database\PSWEB.FDB"
