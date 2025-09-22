@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 echo ========================================
 echo     ATUALIZACAO REPOSITORIO GIT
 echo ========================================
@@ -31,21 +32,27 @@ git branch -M main
 
 :: Faz push (com force se necessário)
 echo [6] Enviando para GitHub...
-git push -u origin main
-if %errorlevel% neq 0 (
+git push -u origin main 2>&1 | findstr /C:"Everything up-to-date" /C:"branch 'main' set up to track" >nul
+if %errorlevel% equ 0 (
+    echo ✅ Push realizado com sucesso!
+) else (
     echo ⚠️  Push normal falhou. Tentando com --force...
-    git push -u origin main --force
+    git push -u origin main --force 2>&1 | findstr /C:"forced update" /C:"branch 'main' set up to track" >nul
     if %errorlevel% equ 0 (
         echo ✅ Push forcado realizado com sucesso!
     ) else (
         echo ❌ Falha no push. Verifique sua conexão e credenciais.
     )
-) else (
-    echo ✅ Repositório atualizado com sucesso!
 )
 
 echo.
+echo [7] Verificando status final...
+git status --short
+echo.
 echo ========================================
-echo           PROCESSO CONCLUÍDO
+echo     ✅ REPOSITORIO ATUALIZADO ✅
 echo ========================================
+echo.
+echo 🌐 Acesse: https://github.com/Edson2010hmc/psweb_py
+echo.
 pause
