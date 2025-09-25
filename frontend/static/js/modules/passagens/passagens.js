@@ -714,11 +714,12 @@ async function onNovaPS_Guard() {
             } else {
                 showSuccess('PS excluída com sucesso');
                 await searchPassagens();
-                togglePSForm(false);
                 currentPS = null;
-                setMainTab('consultas'); 
+                await subModules.notifyPSChange(null);
+                togglePSForm(false);
+                setMainTab('consultas');
             }
-            
+
         } catch (error) {
             showError('Erro ao excluir PS: ' + error.message);
         }
