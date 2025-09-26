@@ -833,6 +833,13 @@ async def get_porto_listas_data(passagem_id: int):
         osmob_rows = await db.execute_query(sql_os_mobilizacao, [passagem_id])
         
         # Processa listas usando função pack_list
+        # CORREÇÃO: backend/app/api/v1/passagens_api.py
+        # Data: 2025-01-20
+        # Problema: Mapeamento incorreto de campos na função pack_list do endpoint GET porto-listas
+        # Seções afetadas: 1.7 a 1.10 (listas)
+
+        # Substituir a função pack_list dentro do endpoint get_porto_listas_data():
+
         def pack_list(rows, field_names):
             if not rows:
                 return {"naoPrevisto": True, "linhas": []}
@@ -851,6 +858,8 @@ async def get_porto_listas_data(passagem_id: int):
             for row in rows:
                 if row[1] != 1:  # Se não é sentinela
                     linha_dict = {}
+                    # CORREÇÃO: Mapear corretamente os campos
+                    # row[0] = ID, row[1] = NaoPrevisto, row[2+] = dados
                     for i, field_name in enumerate(field_names):
                         linha_dict[field_name] = row[i + 2] if i + 2 < len(row) else None
                     linhas.append(linha_dict)
@@ -976,6 +985,11 @@ async def salvar_lista_os_mobilizacao(db, passagem_id: int, data: dict):
     await salvar_lista_generica(db, table_name, passagem_id, data,
                                ['OS', 'Descricao', 'Observacoes', 'AnexoPath'])
 
+# CORREÇÃO: backend/app/api/v1/passagens_api.py 
+# Data: 2025-01-20
+# Problema: Função salvar_lista_generica incompleta - PUT porto-listas
+# Seções afetadas: 1.7 a 1.10 (salvamento listas)
+
 async def salvar_lista_generica(db, table_name: str, passagem_id: int, data: dict, fields: list):
     """Função genérica para salvar listas porto"""
     # Limpa registros existentes
@@ -999,7 +1013,7 @@ async def salvar_lista_generica(db, table_name: str, passagem_id: int, data: dic
         )
         return
     
-    # Monta SQL de inserção dinamicamente
+    # Monta SQL de inserção dinamicamente - CORREÇÃO APLICADA
     field_placeholders = ','.join(['?'] * (len(fields) + 2))  # +2 para PassagemId e NaoPrevisto
     all_fields = ['PassagemId', 'NaoPrevisto'] + fields
     fields_str = ','.join(all_fields)

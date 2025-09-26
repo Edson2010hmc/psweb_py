@@ -180,7 +180,6 @@ const PortoSubModule = (function() {
         scope.querySelectorAll('input, textarea, select, button').forEach(el => {
             const isPortoAction = el.id && (
                 el.id.startsWith('btnAdd') || 
-                el.id === 'btnSalvarPorto' ||
                 el.classList.contains('btn-del-row')
             );
             
@@ -376,8 +375,8 @@ const PortoSubModule = (function() {
             // 1.6 Inspeções Petrobras
             if (data.inspecoesPetrobras) {
                 _setCheckboxValue('ipNaoPrevisto', data.inspecoesPetrobras.NaoPrevisto);
-                _setFieldValue('ipGer', data.inspecoesPetrobras.Ger);
-                _setFieldValue('ipAud', data.inspecoesPetrobras.Aud);
+                _setFieldValue('ipGer', data.inspecoesPetrobras.Gerencia);      // CORREÇÃO: .Ger → .Gerencia
+                _setFieldValue('ipAud', data.inspecoesPetrobras.Auditor);       // CORREÇÃO: .Aud → .Auditor  
                 _setFieldValue('ipObs', data.inspecoesPetrobras.Observacoes);
             }
 
@@ -485,8 +484,8 @@ const PortoSubModule = (function() {
             },
             inspecoesPetrobras: {
                 NaoPrevisto: getElement('ipNaoPrevisto')?.checked ? 1 : 0,
-                Ger: getElement('ipGer')?.value || null,
-                Aud: getElement('ipAud')?.value || null,
+                Auditor: getElement('ipAud')?.value || null,    // CORREÇÃO: Aud → Auditor  
+                Gerencia: getElement('ipGer')?.value || null,   // CORREÇÃO: Ger → Gerencia
                 Observacoes: getElement('ipObs')?.value || null
             }
         };
@@ -601,13 +600,7 @@ const PortoSubModule = (function() {
             }
         });
 
-        // Botão de salvar Porto
-        const btnSalvar = getElement('btnSalvarPorto');
-        if (btnSalvar) {
-            btnSalvar.removeEventListener('click', saveAllPortoData);
-            btnSalvar.addEventListener('click', saveAllPortoData);
-        }
-
+        
         // Toggles de visibilidade
         bindVisibilityToggles();
 
