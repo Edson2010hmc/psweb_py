@@ -624,6 +624,7 @@ async function onNovaPS_Guard() {
             
             // Atualiza PS atual com dados salvos
             currentPS = result;
+            await salvarSubmodulos(mostrarMensagens);
             
             // Recarrega lista para mostrar mudanças
             await searchPassagens();
@@ -651,12 +652,83 @@ async function onNovaPS_Guard() {
         try {
             // Salva silenciosamente (sem mensagens de sucesso/erro)
             await salvarPassagem(false);
+            await salvarSubmodulos(false);
             console.log(`📝 ${MODULE_NAME}: PS ${currentPS.PassagemId} salva automaticamente`);
         } catch (error) {
             console.warn(`⚠️ ${MODULE_NAME}: Erro no salvamento automático:`, error);
             // Não exibe erro para usuário em salvamento automático
         }
     }
+
+        /**
+     * Data de geração: 26/09/2025
+     * Motivo da revisão: Criar função separada para salvamento de submódulos
+     * Histórico: 
+     * - v1.0: Função nova para separar responsabilidades e evitar duplicação de código
+     */
+
+    // ===================================================================================================
+    // NOVA FUNÇÃO: SALVAMENTO DE SUBMÓDULOS
+    // ===================================================================================================
+
+    /**
+     * Salva todos os submódulos registrados
+     * @param {boolean} mostrarMensagens - Se deve exibir mensagens de erro/sucesso
+     * @returns {boolean} - true se todos salvaram com sucesso, false se houve erros
+     */
+    async function salvarSubmodulos(mostrarMensagens = true) {
+        if (!currentPS) {
+            return true; // Sem PS carregada, considera sucesso
+        }
+
+        let subModuleErrors = [];
+        let successCount = 0;
+        
+        console.log(`💾 ${MODULE_NAME}: Iniciando salvamento de ${subModules.registry.size} submódulos...`);
+        
+        for (const [subModuleName, subModuleInstance] of subModules.registry) {
+            try {
+                // Verifica se o submódulo tem método save()
+                if (subModuleInstance && typeof subModuleInstance.save === 'function') {
+                    console.log(`💾 ${MODULE_NAME}: Salvando submódulo '${subModuleName}'...`);
+                    
+                    const subResult = await subModuleInstance.save();
+                    
+                    if (subResult && subResult.error) {
+                        throw new Error(subResult.error);
+                    }
+                    
+                    successCount++;
+                    console.log(`✅ ${MODULE_NAME}: Submódulo '${subModuleName}' salvo com sucesso`);
+                } else {
+                    console.log(`ℹ️ ${MODULE_NAME}: Submódulo '${subModuleName}' não possui método save()`);
+                }
+            } catch (subError) {
+                const errorMsg = `Erro ao salvar ${subModuleName}: ${subError.message}`;
+                subModuleErrors.push(errorMsg);
+                console.error(`❌ ${MODULE_NAME}: ${errorMsg}`);
+            }
+        }
+
+        // Exibe resultado apenas se solicitado
+        if (mostrarMensagens && subModuleErrors.length > 0) {
+            const errorList = subModuleErrors.join('\n• ');
+            showError(`Erros nos submódulos:\n• ${errorList}`);
+        }
+
+        const success = subModuleErrors.length === 0;
+        console.log(`${success ? '✅' : '⚠️'} ${MODULE_NAME}: Submódulos salvos - ${successCount} sucessos, ${subModuleErrors.length} erros`);
+        
+        return success;
+    }
+
+
+
+
+
+
+
+
 
     async function finalizarPassagem() {
         if (!currentPS) return;

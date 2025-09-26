@@ -120,6 +120,7 @@ class FirebirdConnection:
                 except:
                     pass
     
+    
     def execute_query_sync(self, sql: str, params: Optional[List] = None) -> List[Any]:
         """Versão síncrona como na aplicação funcional"""
         connection = None
